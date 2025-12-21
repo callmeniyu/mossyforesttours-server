@@ -172,7 +172,7 @@ export class CartBookingService {
           console.log(`📝 Booking data to save:`, JSON.stringify(bookingData, null, 2));
 
           const booking = new Booking(bookingData);
-          
+
           // Validate the booking before saving
           const validationError = booking.validateSync();
           if (validationError) {
@@ -268,7 +268,7 @@ export class CartBookingService {
             message: itemError?.message,
             stack: itemError?.stack
           });
-          
+
           // Check if it's a MongoDB validation error
           if (itemError?.name === 'ValidationError') {
             console.error('Validation errors:', itemError.errors);
@@ -352,10 +352,10 @@ export class CartBookingService {
             }, 0),
             currency: 'MYR'
           };
-           
-           await emailService.sendCartBookingConfirmation(cartEmailData);
-           console.log(`📧 Consolidated cart confirmation email sent to ${request.contactInfo.email} for ${result.bookings.length} bookings`);
-         } catch (emailError: any) {
+
+          await emailService.sendCartBookingConfirmation(cartEmailData);
+          console.log(`📧 Consolidated cart confirmation email sent to ${request.contactInfo.email} for ${result.bookings.length} bookings`);
+        } catch (emailError: any) {
           console.error(`⚠️ Failed to send consolidated cart confirmation email:`, emailError.message);
           result.warnings = result.warnings || [];
           result.warnings.push('Cart confirmation email could not be sent');
@@ -420,7 +420,7 @@ export class CartBookingService {
         itemDate.setHours(0, 0, 0, 0);
 
         const isExpired = itemDate < currentDate;
-        
+
         if (isExpired) {
           expiredItems++;
         } else {

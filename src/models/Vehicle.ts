@@ -19,4 +19,6 @@ const VehicleSchema = new Schema<VehicleType>(
 
 VehicleSchema.index({ name: 1 })
 
-export default model<VehicleType>("Vehicle", VehicleSchema)
+import mongoose from 'mongoose';
+const VehicleModel = mongoose.models.Vehicle ? (mongoose.models.Vehicle as mongoose.Model<VehicleType>) : model<VehicleType>("Vehicle", VehicleSchema);
+export default VehicleModel;

@@ -66,7 +66,8 @@ class ReviewSchedulerService {
       for (const booking of eligibleBookings) {
         try {
           // Check if the booking time has actually passed 12 hours ago
-          const bookingDateTime = this.createBookingDateTime(booking.date, booking.time);
+          const bookingDateString = booking.date instanceof Date ? booking.date.toISOString().split('T')[0] : booking.date;
+          const bookingDateTime = this.createBookingDateTime(bookingDateString, booking.time);
           const timeDiff = now.getTime() - bookingDateTime.getTime();
           const hoursDiff = timeDiff / (1000 * 60 * 60);
 

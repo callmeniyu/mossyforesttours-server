@@ -23,13 +23,13 @@ export async function stripeWebhook(req: Request, res: Response) {
 
   try {
     // Dedupe: skip processing if event id already seen
-    const existing = await WebhookEvent.findOne({ eventId: event.id });
+    const existing = await (WebhookEvent as any).findOne({ eventId: event.id });
     if (existing) {
       console.log(`🔁 Skipping already processed event ${event.id}`);
       return res.json({ received: true });
     }
 
-    await WebhookEvent.create({ eventId: event.id, source: 'stripe' });
+    await (WebhookEvent as any).create({ eventId: event.id, source: 'stripe' });
 
     switch (event.type) {
       case 'checkout.session.completed': {

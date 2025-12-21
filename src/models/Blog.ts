@@ -41,6 +41,7 @@ BlogSchema.index({ createdAt: -1 })
 BlogSchema.index({ publishDate: -1 })
 BlogSchema.index({ category: 1, publishDate: -1 })
 
-const Blog = model<BlogType>("Blog", BlogSchema)
+import mongoose from 'mongoose';
+const BlogModel = mongoose.models.Blog ? (mongoose.models.Blog as mongoose.Model<BlogType>) : model<BlogType>("Blog", BlogSchema);
 
-export default Blog
+export default BlogModel;

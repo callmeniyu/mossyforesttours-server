@@ -91,4 +91,6 @@ TransferSchema.index({ type: 1 }) // For type filtering
 TransferSchema.index({ status: 1 }) // For status filtering
 TransferSchema.index({ createdAt: -1 }) // For sorting by creation date
 
-export default model<TransferType>("Transfer", TransferSchema)
+import mongoose from 'mongoose';
+const TransferModel = mongoose.models.Transfer ? (mongoose.models.Transfer as mongoose.Model<TransferType>) : model<TransferType>("Transfer", TransferSchema);
+export default TransferModel;

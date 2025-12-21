@@ -1,5 +1,5 @@
 import { Request, Response } from "express"
-import Blog, { BlogType } from "../models/Blog"
+import BlogModel, { BlogType } from "../models/Blog"
 import { generateSlug } from "../utils/generateSlug"
 
 export const createBlog = async (req: Request, res: Response) => {
@@ -12,7 +12,7 @@ export const createBlog = async (req: Request, res: Response) => {
         }
 
         // Validate slug uniqueness
-        const existingBlog = await Blog.findOne({ slug: blogData.slug })
+        const existingBlog = await BlogModel.findOne({ slug: blogData.slug })
         if (existingBlog) {
             return res.status(400).json({
                 success: false,
@@ -36,7 +36,7 @@ export const createBlog = async (req: Request, res: Response) => {
             blogData.views = 0
         }
 
-        const blog = new Blog(blogData)
+        const blog = new BlogModel(blogData)
         const savedBlog = await blog.save()
 
         res.status(201).json({
@@ -85,13 +85,13 @@ export const getBlogs = async (req: Request, res: Response) => {
 
         // If requesting featured blogs only, ignore pagination and return top featured by rank
         if (featuredOnly) {
-            const featured = await Blog.find({ featuredRank: { $gt: 0 } }).sort({ featuredRank: 1 }).limit(3)
+            const featured = await BlogModel.find({ featuredRank: { $gt: 0 } }).sort({ featuredRank: 1 }).limit(3)
             return res.json({ success: true, data: featured })
         }
 
-        const blogs = await Blog.find(query).sort(sort).skip(skip).limit(limit)
+        const blogs = await BlogModel.find(query).sort(sort).skip(skip).limit(limit)
 
-        const total = await Blog.countDocuments(query)
+        const total = await BlogModel.countDocuments(query)
         const totalPages = Math.ceil(total / limit)
 
         res.json({
@@ -116,7 +116,7 @@ export const getBlogs = async (req: Request, res: Response) => {
 export const getBlogById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const blog = await Blog.findById(id)
+        const blog = await BlogModel.findById(id)
 
         if (!blog) {
             return res.status(404).json({
@@ -141,7 +141,7 @@ export const getBlogById = async (req: Request, res: Response) => {
 export const getBlogBySlug = async (req: Request, res: Response) => {
     try {
         const { slug } = req.params
-        const blog = await Blog.findOne({ slug })
+        const blog = await BlogModel.findOne({ slug })
 
         if (!blog) {
             return res.status(404).json({
@@ -173,7 +173,7 @@ export const updateBlog = async (req: Request, res: Response) => {
         const blogData = req.body
 
         // Check if blog exists
-        const existingBlog = await Blog.findById(id)
+        const existingBlog = await BlogModel.findById(id)
         if (!existingBlog) {
             return res.status(404).json({
                 success: false,
@@ -183,7 +183,7 @@ export const updateBlog = async (req: Request, res: Response) => {
 
         // Check slug uniqueness if slug is being updated
         if (blogData.slug && blogData.slug !== existingBlog.slug) {
-            const duplicateBlog = await Blog.findOne({ slug: blogData.slug })
+            const duplicateBlog = await BlogModel.findOne({ slug: blogData.slug })
             if (duplicateBlog) {
                 return res.status(400).json({
                     success: false,
@@ -192,7 +192,7 @@ export const updateBlog = async (req: Request, res: Response) => {
             }
         }
 
-        const updatedBlog = await Blog.findByIdAndUpdate(id, blogData, {
+        const updatedBlog = await BlogModel.findByIdAndUpdate(id, blogData, {
             new: true,
             runValidators: true,
         })
@@ -224,7 +224,7 @@ export const deleteBlog = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
 
-        const deletedBlog = await Blog.findByIdAndDelete(id)
+        const deletedBlog = await BlogModel.findByIdAndDelete(id)
 
         if (!deletedBlog) {
             return res.status(404).json({
@@ -250,7 +250,7 @@ export const incrementBlogViews = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
 
-        const blog = await Blog.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true })
+        const blog = await BlogModel.findByIdAndUpdate(id, { $inc: { views: 1 } }, { new: true })
 
         if (!blog) {
             return res.status(404).json({
@@ -283,7 +283,7 @@ export const setBlogFeature = async (req: Request, res: Response) => {
             return res.status(400).json({ success: false, message: 'featuredRank must be a number between 0 and 3' })
         }
 
-        const blog = await Blog.findById(id)
+        const blog = await BlogModel.findById(id)
         if (!blog) {
             return res.status(404).json({ success: false, message: 'Blog not found' })
         }
@@ -296,21 +296,21 @@ export const setBlogFeature = async (req: Request, res: Response) => {
         }
 
         // Ensure unique ranks: if another blog already has this rank, swap or set it to 0
-        const existing = await Blog.findOne({ featuredRank })
+        const existing = await BlogModel.findOne({ featuredRank })
         if (existing && (existing as any)._id.toString() !== id) {
             // Unset existing or swap ranks. We'll unset the existing to avoid collisions.
             (existing as any).featuredRank = 0
             await (existing as any).save()
         }
 
-    blog.featuredRank = featuredRank
-    await blog.save()
+        blog.featuredRank = featuredRank
+        await blog.save()
 
         // Ensure at most 3 featured blogs: if more than 3 exist, remove highest rank >3 (shouldn't happen)
-        const featuredCount = await Blog.countDocuments({ featuredRank: { $gt: 0 } })
+        const featuredCount = await BlogModel.countDocuments({ featuredRank: { $gt: 0 } })
         if (featuredCount > 3) {
             // Remove extras by clearing the highest featuredRank entries beyond the first 3
-            const extras = await Blog.find({ featuredRank: { $gt: 0 } }).sort({ featuredRank: 1 }).skip(3)
+            const extras = await BlogModel.find({ featuredRank: { $gt: 0 } }).sort({ featuredRank: 1 }).skip(3)
             for (const ex of extras) {
                 (ex as any).featuredRank = 0
                 await (ex as any).save()

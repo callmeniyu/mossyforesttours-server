@@ -1,12 +1,19 @@
 import { Schema, model, Document, Types } from "mongoose"
 import { FAQType } from "./common"
 
+export interface ItineraryItem {
+    time: string
+    activity: string
+}
+
 export interface TourDetails {
     about: string
-    itinerary: string
-    pickupLocation: string
+    longDescription?: string
+    itinerary: ItineraryItem[]
+    pickupLocations: string[]
     pickupGuidelines?: string
-    note?: string
+    notes: string[]
+    includes: string[]
     faq: Types.DocumentArray<FAQType>
 }
 
@@ -16,12 +23,15 @@ export interface TourType extends Document {
     image: string
     tags: string[]
     description: string
+    category?: string  // Nature, Scenic, Cultural, Family, etc.
     type: "co-tour" | "private"
     packageType: "tour"
     duration: string
     period: "Half-Day" | "Full-Day"
     status: "active" | "sold"
     bookedCount: number
+    rating?: number  // Average rating out of 5
+    reviewCount?: number  // Number of reviews
     oldPrice: number
     newPrice: number
     childPrice: number
@@ -30,7 +40,7 @@ export interface TourType extends Document {
     vehicle?: string // Vehicle name for private tours
     seatCapacity?: number // Seat capacity for private tours (from vehicle)
     departureTimes: string[] // e.g. ["08:00 AM","01:30 PM"]
-    label?: "Recommended" | "Popular" | "Best Value" | "Best seller"
+    label?: "Recommended" | "Popular" | "Best Value" | "Best Seller"
     details: TourDetails
     isAvailable: boolean  // Toggle to enable/disable package booking
     lastSlotsGeneratedAt?: Date  // Track when slots were last generated
@@ -45,12 +55,15 @@ const TourSchema = new Schema<TourType>(
         image: String,
         tags: [String],
         description: String,
+        category: String,
         type: { type: String, enum: ["co-tour", "private"] },
         packageType: { type: String, default: "tour" },
         duration: String,
         period: { type: String, enum: ["Half-Day", "Full-Day"], required: true },
         status: { type: String, enum: ["active", "sold"], default: "active" },
         bookedCount: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
+        reviewCount: { type: Number, default: 0 },
         oldPrice: Number,
         newPrice: Number,
         childPrice: Number,
@@ -59,13 +72,18 @@ const TourSchema = new Schema<TourType>(
         vehicle: String, // Vehicle name for private tours
         seatCapacity: Number, // Seat capacity for private tours (from vehicle)
         departureTimes: [String],
-        label: { type: String, enum: ["Recommended", "Popular", "Best Value", "Best seller"], default: null },
+        label: { type: String, enum: ["Recommended", "Popular", "Best Value", "Best Seller"], default: null },
         details: {
             about: String,
-            itinerary: String,
-            pickupLocation: String,
+            longDescription: String,
+            itinerary: [{
+                time: String,
+                activity: String
+            }],
+            pickupLocations: [String],
             pickupGuidelines: String,
-            note: String,
+            notes: [String],
+            includes: [String],
             faq: [
                 {
                     question: String,
@@ -86,4 +104,6 @@ TourSchema.index({ status: 1 }) // For status filtering
 TourSchema.index({ createdAt: -1 }) // For sorting by creation date
 TourSchema.index({ title: 1 }) // For title search
 
-export default model<TourType>("Tour", TourSchema)
+import mongoose from 'mongoose';
+const TourModel = mongoose.models.Tour ? (mongoose.models.Tour as mongoose.Model<TourType>) : model<TourType>("Tour", TourSchema);
+export default TourModel;

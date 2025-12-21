@@ -6,4 +6,5 @@ const WebhookEventSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
-export default mongoose.model('WebhookEvent', WebhookEventSchema);
+const WebhookEventModel = mongoose.models.WebhookEvent ? (mongoose.models.WebhookEvent as mongoose.Model<any>) : mongoose.model('WebhookEvent', WebhookEventSchema);
+export default WebhookEventModel;

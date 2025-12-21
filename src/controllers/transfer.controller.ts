@@ -1,16 +1,16 @@
 import { Request, Response } from "express"
 import { Types } from "mongoose"
-import Transfer, { TransferType } from "../models/Transfer"
-import Vehicle from "../models/Vehicle"
+import TransferModel, { TransferType } from "../models/Transfer"
+import VehicleModel from "../models/Vehicle"
 import { generateSlug } from "../utils/generateSlug"
 import { TimeSlotService } from "../services/timeSlot.service"
 
 export const createTransfer = async (req: Request, res: Response) => {
     try {
-    const transferData = req.body
-    // Debug: log incoming vehicle field to help trace missing vehicle issues
-    console.log('createTransfer - incoming vehicle:', transferData?.vehicle)
-    console.log('createTransfer - incoming keys:', Object.keys(transferData || {}))
+        const transferData = req.body
+        // Debug: log incoming vehicle field to help trace missing vehicle issues
+        console.log('createTransfer - incoming vehicle:', transferData?.vehicle)
+        console.log('createTransfer - incoming keys:', Object.keys(transferData || {}))
 
         // Ensure packageType is always 'transfer'
         transferData.packageType = "transfer"
@@ -21,7 +21,7 @@ export const createTransfer = async (req: Request, res: Response) => {
         }
 
         // Validate slug uniqueness
-        const existingTransfer = await Transfer.findOne({ slug: transferData.slug })
+        const existingTransfer = await TransferModel.findOne({ slug: transferData.slug })
         if (existingTransfer) {
             return res.status(400).json({
                 success: false,
@@ -68,7 +68,7 @@ export const createTransfer = async (req: Request, res: Response) => {
             transferData.minimumPerson = 1
         }
 
-        const transfer = new Transfer(transferData)
+        const transfer = new TransferModel(transferData)
         const savedTransfer = await transfer.save()
         // Debug: log saved document vehicle to verify persistence
         try {
@@ -85,7 +85,7 @@ export const createTransfer = async (req: Request, res: Response) => {
             if (transferData.type === "Private" && transferData.vehicle) {
                 // For Private transfers: use vehicle.units (number of vehicles available)
                 try {
-                    const vehicleDoc = await Vehicle.findOne({ name: transferData.vehicle }).lean()
+                    const vehicleDoc = await VehicleModel.findOne({ name: transferData.vehicle }).lean()
                     if (vehicleDoc && typeof vehicleDoc.units === 'number') {
                         capacity = vehicleDoc.units
                     } else {
@@ -162,9 +162,9 @@ export const getTransfers = async (req: Request, res: Response) => {
 
         const skip = (Number(page) - 1) * Number(limit)
 
-        const transfers = await Transfer.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean() // Use lean() for better performance
+        const transfers = await TransferModel.find(query).sort({ createdAt: -1 }).skip(skip).limit(Number(limit)).lean() // Use lean() for better performance
 
-        const total = await Transfer.countDocuments(query)
+        const total = await TransferModel.countDocuments(query)
 
         res.json({
             success: true,
@@ -188,7 +188,7 @@ export const getTransfers = async (req: Request, res: Response) => {
 export const getTransferById = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const transfer = await Transfer.findById(id).lean() // Use lean() for better performance
+        const transfer = await TransferModel.findById(id).lean() // Use lean() for better performance
 
         if (!transfer) {
             return res.status(404).json({
@@ -213,7 +213,7 @@ export const getTransferById = async (req: Request, res: Response) => {
 export const getTransferBySlug = async (req: Request, res: Response) => {
     try {
         const { slug } = req.params
-        const transfer = await Transfer.findOne({ slug }).lean() // Use lean() for better performance
+        const transfer = await TransferModel.findOne({ slug }).lean() // Use lean() for better performance
 
         // Debug: log FAQ count and a short sample to help diagnose production truncation issues
         try {
@@ -249,7 +249,7 @@ export const getTransferBySlug = async (req: Request, res: Response) => {
 
 export const getLastTransfer = async (req: Request, res: Response) => {
     try {
-        const transfer = await Transfer.findOne({}).sort({ createdAt: -1 }).lean()
+        const transfer = await TransferModel.findOne({}).sort({ createdAt: -1 }).lean()
         if (!transfer) {
             return res.status(404).json({ success: false, message: 'No transfers found' })
         }
@@ -264,18 +264,18 @@ export const updateTransfer = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
         const transferData = req.body
-    // Debug: log incoming vehicle field for update
-    try {
-        console.log('updateTransfer - incoming vehicle:', transferData?.vehicle)
-        console.log('updateTransfer - incoming keys:', Object.keys(transferData || {}))
-        // print snapshot of incoming transferData (safe stringify)
-        console.log('updateTransfer - incoming snapshot:', JSON.stringify(transferData))
-    } catch (err) {
-        console.warn('updateTransfer - error logging incoming data', err)
-    }
+        // Debug: log incoming vehicle field for update
+        try {
+            console.log('updateTransfer - incoming vehicle:', transferData?.vehicle)
+            console.log('updateTransfer - incoming keys:', Object.keys(transferData || {}))
+            // print snapshot of incoming transferData (safe stringify)
+            console.log('updateTransfer - incoming snapshot:', JSON.stringify(transferData))
+        } catch (err) {
+            console.warn('updateTransfer - error logging incoming data', err)
+        }
 
         // Get existing transfer to check if image changed
-        const existingTransfer = await Transfer.findById(id)
+        const existingTransfer = await TransferModel.findById(id)
         if (!existingTransfer) {
             return res.status(404).json({
                 success: false,
@@ -327,14 +327,14 @@ export const updateTransfer = async (req: Request, res: Response) => {
         // Note: With Cloudinary, we don't need to delete old images locally
         // Cloudinary handles storage and we can optionally clean up old images via their API
 
-    // Ensure vehicle field is not accidentally omitted when updating
-    // (transferData may or may not include vehicle; passing transferData as-is lets mongoose update provided fields)
-    const transfer = await Transfer.findByIdAndUpdate(id, transferData, { new: true, runValidators: true })
-    try {
-        console.log('updateTransfer - updated transfer vehicle:', transfer?.vehicle)
-    } catch (err) {
-        console.warn('updateTransfer - failed to log updated transfer', err)
-    }
+        // Ensure vehicle field is not accidentally omitted when updating
+        // (transferData may or may not include vehicle; passing transferData as-is lets mongoose update provided fields)
+        const transfer = await TransferModel.findByIdAndUpdate(id, transferData, { new: true, runValidators: true })
+        try {
+            console.log('updateTransfer - updated transfer vehicle:', transfer?.vehicle)
+        } catch (err) {
+            console.warn('updateTransfer - failed to log updated transfer', err)
+        }
 
         if (!transfer) {
             return res.status(404).json({
@@ -350,11 +350,11 @@ export const updateTransfer = async (req: Request, res: Response) => {
             let capacity
             const transferType = transferData.type || existingTransfer.type
             const vehicleName = transferData.vehicle || existingTransfer.vehicle
-            
+
             if (transferType === "Private" && vehicleName) {
                 // For Private transfers: use vehicle.units (number of vehicles available)
                 try {
-                    const vehicleDoc = await Vehicle.findOne({ name: vehicleName }).lean()
+                    const vehicleDoc = await VehicleModel.findOne({ name: vehicleName }).lean()
                     if (vehicleDoc && typeof vehicleDoc.units === 'number') {
                         capacity = vehicleDoc.units
                     } else {
@@ -368,12 +368,12 @@ export const updateTransfer = async (req: Request, res: Response) => {
                 // For Non-Private transfers (Shared/Both): use maximumPerson (number of person seats)
                 capacity = transferData.maximumPerson || existingTransfer.maximumPerson || 10
             }
-            
+
             // Calculate existing capacity to compare for changes
             let existingCapacity
             if (existingTransfer.type === "Private" && existingTransfer.vehicle) {
                 try {
-                    const vehicleDoc = await Vehicle.findOne({ name: existingTransfer.vehicle }).lean()
+                    const vehicleDoc = await VehicleModel.findOne({ name: existingTransfer.vehicle }).lean()
                     existingCapacity = (vehicleDoc && typeof vehicleDoc.units === 'number') ? vehicleDoc.units : 1
                 } catch (err) {
                     existingCapacity = 1
@@ -381,7 +381,7 @@ export const updateTransfer = async (req: Request, res: Response) => {
             } else {
                 existingCapacity = existingTransfer.maximumPerson || 10
             }
-            
+
             if (JSON.stringify(times) !== JSON.stringify(existingTransfer.times) || capacity !== existingCapacity) {
                 await TimeSlotService.updateSlotsForPackage(
                     "transfer",
@@ -422,7 +422,7 @@ export const updateTransfer = async (req: Request, res: Response) => {
 export const deleteTransfer = async (req: Request, res: Response) => {
     try {
         const { id } = req.params
-        const transfer = await Transfer.findByIdAndDelete(id)
+        const transfer = await TransferModel.findByIdAndDelete(id)
 
         if (!transfer) {
             return res.status(404).json({
@@ -465,7 +465,7 @@ export const updateTransferStatus = async (req: Request, res: Response) => {
             })
         }
 
-        const transfer = await Transfer.findByIdAndUpdate(id, { status }, { new: true, runValidators: true })
+        const transfer = await TransferModel.findByIdAndUpdate(id, { status }, { new: true, runValidators: true })
 
         if (!transfer) {
             return res.status(404).json({
@@ -498,7 +498,7 @@ export const checkSlugAvailability = async (req: Request, res: Response) => {
             query._id = { $ne: excludeId }
         }
 
-        const existingTransfer = await Transfer.findOne(query)
+        const existingTransfer = await TransferModel.findOne(query)
 
         res.json({
             success: true,
@@ -526,7 +526,7 @@ export const toggleTransferAvailability = async (req: Request, res: Response) =>
             })
         }
 
-        const transfer = await Transfer.findByIdAndUpdate(
+        const transfer = await TransferModel.findByIdAndUpdate(
             id,
             { isAvailable },
             { new: true, runValidators: true }
@@ -556,7 +556,7 @@ export const toggleTransferAvailability = async (req: Request, res: Response) =>
 export const getVehicles = async (req: Request, res: Response) => {
     try {
         // Get unique vehicles from private transfers
-        const vehicles = await Transfer.distinct("vehicle", {
+        const vehicles = await TransferModel.distinct("vehicle", {
             type: "Private",
             vehicle: { $exists: true, $nin: [null, ""] }
         })

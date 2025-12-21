@@ -1,4 +1,5 @@
 import './config/env'; // Load environment variables first
+import './models'; // Register all models with Mongoose
 import app from './app';
 import connectDB from './config/db';
 import reviewScheduler from './services/reviewScheduler.service';

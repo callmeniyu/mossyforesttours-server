@@ -58,13 +58,13 @@ export class CartService {
       // Get package details with minimal fields for performance
       let packageDoc: any;
       const selectFields = 'title image images newPrice price type vehicle seatCapacity';
-      
+
       if (item.packageType === 'tour') {
         packageDoc = await Tour.findById(item.packageId).select(selectFields).lean();
       } else {
         packageDoc = await Transfer.findById(item.packageId).select(selectFields).lean();
       }
-      
+
       if (!packageDoc) {
         throw new Error('Package not found');
       }
@@ -94,7 +94,7 @@ export class CartService {
       };
 
       // Check if item already exists (same package, date, time)
-      const existingItemIndex = cart.items.findIndex((cartItem: ICartItem) => 
+      const existingItemIndex = cart.items.findIndex((cartItem: ICartItem) =>
         cartItem.packageId.toString() === item.packageId &&
         cartItem.selectedDate.toDateString() === parseDateAsMalaysiaTimezone(item.selectedDate).toDateString() &&
         cartItem.selectedTime === item.selectedTime
@@ -112,9 +112,9 @@ export class CartService {
         // Add new item
         cart.items.push(cartItem);
       }
-      
+
       await cart.save();
-      
+
       return cart;
     } catch (error) {
       console.error('Error adding to cart:', error);
@@ -132,7 +132,7 @@ export class CartService {
   }): Promise<ICart> {
     try {
       const cart = await this.getCart(userEmail);
-      
+
       const item = cart.items.find(item => item._id?.toString() === itemId);
       if (!item) {
         throw new Error('Cart item not found');
@@ -147,7 +147,7 @@ export class CartService {
 
       // Recalculate total price
       item.totalPrice = (item.adults + item.children) * item.packagePrice;
-      
+
       await cart.save();
       return cart;
     } catch (error) {
@@ -160,11 +160,11 @@ export class CartService {
   async removeFromCart(userEmail: string, itemId: string): Promise<ICart> {
     try {
       const cart = await this.getCart(userEmail);
-      
+
       // Remove item by _id
       // Remove the item from the cart
       cart.items = cart.items.filter((item: ICartItem) => item._id?.toString() !== itemId);
-      
+
       await cart.save();
       return cart;
     } catch (error) {
@@ -201,12 +201,12 @@ export class CartService {
   async getCartWithDetails(userEmail: string): Promise<any> {
     try {
       const cart = await this.getCart(userEmail);
-      
+
       // Manually populate package details
       const populatedItems = await Promise.all(
         cart.items.map(async (item: ICartItem) => {
           let packageDetails = null;
-          
+
           if (item.packageType === 'tour') {
             packageDetails = await Tour.findById(item.packageId).select('title image newPrice oldPrice slug duration');
           } else {

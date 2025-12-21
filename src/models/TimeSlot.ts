@@ -48,4 +48,6 @@ const TimeSlotSchema = new Schema<TimeSlotType>(
   { timestamps: true }
 )
 
-export default model<TimeSlotType>("TimeSlot", TimeSlotSchema)
+import mongoose from 'mongoose';
+const TimeSlotModel = mongoose.models.TimeSlot ? (mongoose.models.TimeSlot as mongoose.Model<TimeSlotType>) : model<TimeSlotType>("TimeSlot", TimeSlotSchema);
+export default TimeSlotModel;

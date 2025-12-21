@@ -12,6 +12,7 @@ const BlackoutDateSchema = new Schema<BlackoutDateType>({
   description: { type: String, default: "" },
 });
 
-const BlackoutDate = model<BlackoutDateType>("BlackoutDate", BlackoutDateSchema);
+import mongoose from 'mongoose';
+const BlackoutDate = mongoose.models.BlackoutDate ? (mongoose.models.BlackoutDate as mongoose.Model<BlackoutDateType>) : model<BlackoutDateType>("BlackoutDate", BlackoutDateSchema);
 
 export default BlackoutDate;

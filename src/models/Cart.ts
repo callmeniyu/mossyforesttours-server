@@ -178,4 +178,5 @@ CartSchema.methods.getItemCount = function() {
   return this.items.length;
 };
 
-export default mongoose.model<ICart>('Cart', CartSchema);
+const CartModel = mongoose.models.Cart ? (mongoose.models.Cart as mongoose.Model<ICart>) : mongoose.model<ICart>('Cart', CartSchema);
+export default CartModel;

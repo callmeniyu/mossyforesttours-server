@@ -8,6 +8,8 @@ class BookingController {
   // Create a new booking
   async createBooking(req: Request, res: Response) {
     try {
+      console.log('[BOOKING_CONTROLLER] Received booking request:', JSON.stringify(req.body, null, 2));
+      
       const {
         packageType,
         packageId,
@@ -58,6 +60,15 @@ class BookingController {
         packageDetails = await TransferModel.findById(packageId);
       }
 
+      console.log('[BOOKING_CONTROLLER] Creating booking with data:', {
+        packageType,
+        packageId,
+        date: parsedDateForBooking,
+        time,
+        adults: adultsCount,
+        children: children || 0,
+      });
+
       const booking = await BookingService.createBookingDirect({
         packageType,
         packageId: new mongoose.Types.ObjectId(packageId),
@@ -78,6 +89,8 @@ class BookingController {
           paymentStatus: "pending"
         }
       });
+
+      console.log('[BOOKING_CONTROLLER] Booking created successfully:', (booking as any)._id);
 
       // Send confirmation email to customer
       try {

@@ -62,7 +62,7 @@ export const createTour = async (req: Request, res: Response) => {
             if (tourData.type === "private" && tourData.vehicle) {
                 // For Private tours: use vehicle.units (number of vehicles available)
                 try {
-                    const vehicleDoc = await Vehicle.findOne({ name: tourData.vehicle }).lean()
+                    const vehicleDoc = await Vehicle.findOne({ name: tourData.vehicle }).lean() as any
                     if (vehicleDoc && typeof vehicleDoc.units === 'number') {
                         capacity = vehicleDoc.units
                     } else {
@@ -186,7 +186,7 @@ export const getTourById = async (req: Request, res: Response) => {
 export const getTourBySlug = async (req: Request, res: Response) => {
     try {
         const { slug } = req.params
-        const tour = await Tour.findOne({ slug }).lean() // Use lean() for better performance
+        const tour = await Tour.findOne({ slug }).lean() as any // Use lean() for better performance
 
         // Debug: log FAQ count and a short sample to help diagnose production truncation issues
         try {
@@ -278,16 +278,16 @@ export const updateTour = async (req: Request, res: Response) => {
         // Update time slots if departure times or capacity changed
         try {
             const departureTimes = tourData.departureTimes || existingTour.departureTimes
-            
+
             // Determine capacity based on tour type (same logic as creation)
             let capacity
             const tourType = tourData.type || existingTour.type
             const vehicleName = tourData.vehicle || existingTour.vehicle
-            
+
             if (tourType === "private" && vehicleName) {
                 // For Private tours: use vehicle.units (number of vehicles available)
                 try {
-                    const vehicleDoc = await Vehicle.findOne({ name: vehicleName }).lean()
+                    const vehicleDoc = await Vehicle.findOne({ name: vehicleName }).lean() as any
                     if (vehicleDoc && typeof vehicleDoc.units === 'number') {
                         capacity = vehicleDoc.units
                     } else {
@@ -301,12 +301,12 @@ export const updateTour = async (req: Request, res: Response) => {
                 // For Co-tours: use maximumPerson (number of person seats)
                 capacity = tourData.maximumPerson || existingTour.maximumPerson || 10
             }
-            
+
             // Calculate existing capacity to compare for changes
             let existingCapacity
             if (existingTour.type === "private" && existingTour.vehicle) {
                 try {
-                    const vehicleDoc = await Vehicle.findOne({ name: existingTour.vehicle }).lean()
+                    const vehicleDoc = await Vehicle.findOne({ name: existingTour.vehicle }).lean() as any
                     existingCapacity = (vehicleDoc && typeof vehicleDoc.units === 'number') ? vehicleDoc.units : 1
                 } catch (err) {
                     existingCapacity = 1
@@ -314,9 +314,10 @@ export const updateTour = async (req: Request, res: Response) => {
             } else {
                 existingCapacity = existingTour.maximumPerson || 10
             }
-            
-            if (JSON.stringify(departureTimes) !== JSON.stringify(existingTour.departureTimes) || 
-                capacity !== existingCapacity) {
+
+            if (JSON.stringify(departureTimes) !== JSON.stringify(existingTour.departureTimes) ||
+                capacity !== existingCapacity ||
+                tourData.minimumPerson !== existingTour.minimumPerson) {
                 await TimeSlotService.updateSlotsForPackage(
                     "tour",
                     tour._id as Types.ObjectId,

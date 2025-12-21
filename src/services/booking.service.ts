@@ -1,8 +1,8 @@
 import BookingModel, { Booking } from "../models/Booking";
+import mongoose from "mongoose";
 import TimeSlotModel from "../models/TimeSlot";
 import { TimeSlotService } from "./timeSlot.service";
 import { EmailService } from "./email.service";
-import mongoose from "mongoose";
 
 class BookingService {
   // Mark confirmed bookings as completed if their date/time is in the past
@@ -53,6 +53,13 @@ class BookingService {
     vehicleSeatCapacity?: number;
   }): Promise<Booking> {
     try {
+      console.log('[BOOKING_SERVICE] Starting createBookingDirect with data:', {
+        packageType: data.packageType,
+        packageId: data.packageId.toString(),
+        date: data.date,
+        email: data.contactInfo.email
+      });
+
       // Get package details to check minimum person requirement
       let packageDetails: any = null;
       if (data.packageType === 'tour') {
@@ -69,11 +76,11 @@ class BookingService {
 
       // First, try to find or create a user for this email
       let userId: mongoose.Types.ObjectId | null = null;
-      
+
       try {
         const UserModel = mongoose.model('User');
         let user = await UserModel.findOne({ email: data.contactInfo.email });
-        
+
         if (!user) {
           // Create new user for this booking
           console.log(`Creating new user for email: ${data.contactInfo.email}`);
@@ -90,7 +97,7 @@ class BookingService {
         } else {
           console.log(`👤 Found existing user with ID: ${user._id}`);
         }
-        
+
         userId = user._id;
       } catch (userError) {
         console.error('Error creating/finding user:', userError);
@@ -98,8 +105,8 @@ class BookingService {
         console.log('⚠️ Continuing with guest booking (no user ID)');
       }
 
-  const totalGuests = data.adults + data.children;
-      
+      const totalGuests = data.adults + data.children;
+
       // Check slot availability using TimeSlotService (includes minimum person validation)
       // For vehicle bookings, requestedPersons should be treated as 1 (one vehicle)
       const requestedPersons = data.isVehicleBooking ? 1 : totalGuests;
@@ -147,13 +154,14 @@ class BookingService {
       });
 
       const savedBooking = await booking.save();
+      console.log('[BOOKING_SERVICE] ✅ Booking saved to database with ID:', savedBooking._id);
 
       // Update slot booking count using TimeSlotService and package bookedCount
       const PackageModel = data.packageType === 'tour' ? mongoose.model('Tour') : mongoose.model('Transfer');
       const pkg = await PackageModel.findById(data.packageId);
       const isPrivate = pkg && (pkg.type === 'Private' || pkg.type === 'private');
 
-    if (isPrivate && data.packageType === 'transfer') {
+      if (isPrivate && data.packageType === 'transfer') {
         // For private transfers, treat as one vehicle booking
         await TimeSlotService.updateSlotBooking(
           data.packageType,
@@ -169,7 +177,7 @@ class BookingService {
           { $inc: { bookedCount: 1 } }
         );
         console.log(`✅ Updated Transfer bookedCount by 1 for package ${data.packageId}`);
-    } else {
+      } else {
         // Non-private: update by total guests
         await TimeSlotService.updateSlotBooking(
           data.packageType,
@@ -222,41 +230,41 @@ class BookingService {
       if (opts.currency) update['paymentInfo.currency'] = opts.currency;
 
       const booking = await BookingModel.findOneAndUpdate(
-        { ...filter, $or: [ { 'paymentInfo.paymentStatus': { $exists: false } }, { 'paymentInfo.paymentStatus': { $ne: 'succeeded' } } ] },
+        { ...filter, $or: [{ 'paymentInfo.paymentStatus': { $exists: false } }, { 'paymentInfo.paymentStatus': { $ne: 'succeeded' } }] },
         { $set: update },
         { new: true }
       ).populate('packageId');
 
       if (booking) {
         console.log(`✅ Booking ${booking._id} marked confirmed via Stripe event`);
-        
+
         // Send confirmation email using existing Brevo service
         try {
           const emailService = new EmailService();
-          
+
           // Prepare email data for existing email service
           const emailData = {
             customerName: booking.contactInfo.name,
             customerEmail: booking.contactInfo.email,
             bookingId: booking._id.toString(),
             packageId: booking.packageId._id.toString(),
-            packageName: booking.packageId.name,
+            packageName: (booking.packageId as any).name || (booking.packageId as any).title,
             packageType: booking.packageType,
-            from: booking.from,
-            to: booking.to,
+            from: (booking as any).from, // Safely access if property exists
+            to: (booking as any).to,
             date: booking.date.toISOString().split('T')[0], // Format date as YYYY-MM-DD
             time: booking.time,
             adults: booking.adults,
             children: booking.children,
             pickupLocation: booking.pickupLocation,
-            pickupGuidelines: booking.packageId.pickupGuidelines,
+            pickupGuidelines: (booking.packageId as any).pickupGuidelines,
             total: booking.total,
             currency: booking.paymentInfo.currency || 'MYR',
             isVehicleBooking: booking.isVehicleBooking,
-            vehicleName: booking.vehicleName,
+            vehicleName: (booking as any).vehicleName,
             vehicleSeatCapacity: booking.vehicleSeatCapacity,
           };
-          
+
           const emailSent = await emailService.sendBookingConfirmation(emailData);
           if (emailSent) {
             console.log(`📧 Confirmation email sent to ${booking.contactInfo.email} for booking ${booking._id}`);
@@ -355,7 +363,7 @@ class BookingService {
   // Get bookings by user or admin with optional filters
   async getBookings(filter: any): Promise<Booking[]> {
     const query: any = {};
-    
+
     // Copy all filter properties to query
     Object.assign(query, filter);
 
@@ -386,7 +394,7 @@ class BookingService {
   // Get bookings with full package details
   async getBookingsWithDetails(filter: any): Promise<any[]> {
     const query: any = {};
-    
+
     // Copy all filter properties to query
     Object.assign(query, filter);
 
@@ -403,7 +411,7 @@ class BookingService {
     const bookingsWithDetails = await Promise.all(
       bookings.map(async (booking) => {
         let packageDetails = null;
-        
+
         if (booking.packageType === 'tour') {
           const TourModel = mongoose.model('Tour');
           packageDetails = await TourModel.findById(booking.packageId).select('title image price duration slug');
@@ -444,7 +452,7 @@ class BookingService {
   async getBookingById(id: string): Promise<Booking | null> {
     const booking = await BookingModel.findById(id).exec();
     if (!booking) return null;
-    
+
     // Populate packageId based on packageType
     if (booking.packageType === 'tour') {
       return BookingModel.populate(booking, { path: 'packageId', model: 'Tour' });

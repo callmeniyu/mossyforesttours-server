@@ -104,4 +104,5 @@ BookingSchema.index({ 'paymentInfo.paymentStatus': 1 });
 BookingSchema.index({ createdAt: -1 });
 BookingSchema.index({ reviewEmailSent: 1, date: 1 }); // For review email scheduler
 
-export default mongoose.models.Booking || mongoose.model<Booking>("Booking", BookingSchema);
+const BookingModel = mongoose.models.Booking ? (mongoose.models.Booking as mongoose.Model<Booking>) : mongoose.model<Booking>("Booking", BookingSchema);
+export default BookingModel;

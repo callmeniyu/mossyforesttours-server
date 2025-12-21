@@ -3,7 +3,7 @@ import Booking from "../models/Booking";
 
 export const getRevenueData = async (req: Request, res: Response) => {
   console.log("Revenue controller hit with query:", req.query);
-  
+
   try {
     const { from, to } = req.query;
 

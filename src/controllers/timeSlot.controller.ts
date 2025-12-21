@@ -490,7 +490,7 @@ export const updateSlotMinimumPerson = async (req: Request, res: Response) => {
 
         // Find the specific slot within the document
         const slotIndex = timeSlotDoc.slots.findIndex(slot => slot.time === time)
-        
+
         if (slotIndex === -1) {
             return res.status(404).json({
                 success: false,
@@ -500,7 +500,7 @@ export const updateSlotMinimumPerson = async (req: Request, res: Response) => {
 
         // Update the minimum person for the specific slot
         timeSlotDoc.slots[slotIndex].minimumPerson = minimumPerson
-        
+
         // Save the document
         await timeSlotDoc.save()
 
@@ -532,7 +532,7 @@ export const getServerDateTime = async (req: Request, res: Response) => {
     try {
         // Get current time in Malaysia timezone
         const now = new Date();
-        
+
         // Get Malaysia date without any parsing issues
         const malaysiaDate = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kuala_Lumpur' }); // YYYY-MM-DD
         const malaysiaTime = now.toLocaleTimeString('en-US', {
@@ -541,7 +541,7 @@ export const getServerDateTime = async (req: Request, res: Response) => {
             hour12: true,
             timeZone: 'Asia/Kuala_Lumpur'
         });
-        
+
         // Get Malaysia long date format
         const malaysiaLongDate = now.toLocaleDateString('en-US', {
             weekday: 'long',
