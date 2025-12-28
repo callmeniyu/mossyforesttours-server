@@ -3,6 +3,7 @@ import express from "express"
 import cors from "cors"
 import morgan from "morgan"
 import helmet from "helmet"
+import mongoose from "mongoose"
 import webhookRoutes from "./routes/webhook.routes"
 import tourRoutes from "./routes/tour.routes"
 import transferRoutes from "./routes/transfer.routes"
@@ -37,7 +38,29 @@ app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
 app.get("/health", (req, res) => {
-    res.send("Welcome to the Cameron Hghlands Tours API")
+    const dbStatus = mongoose.connection.readyState;
+    const statusMap: { [key: number]: string } = {
+        0: 'disconnected',
+        1: 'connected',
+        2: 'connecting',
+        3: 'disconnecting'
+    };
+    
+    if (dbStatus === 1) {
+        res.json({
+            status: 'ok',
+            message: 'Cameron Highlands Tours API is running',
+            database: 'connected',
+            timestamp: new Date().toISOString()
+        });
+    } else {
+        res.status(503).json({
+            status: 'error',
+            message: 'Database connection issue',
+            database: statusMap[dbStatus] || 'unknown',
+            timestamp: new Date().toISOString()
+        });
+    }
 })
 app.use("/api/tours", tourRoutes)
 app.use("/api/transfers", transferRoutes)

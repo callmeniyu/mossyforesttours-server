@@ -1,7 +1,29 @@
 import mongoose from "mongoose"
 import { env } from "./env"
 
+// Cache connection for serverless functions
+let cached: {
+    conn: typeof mongoose | null;
+    promise: Promise<typeof mongoose> | null;
+} = {
+    conn: null,
+    promise: null
+};
+
 const connectDB = async () => {
+    // If already connected, return cached connection
+    if (cached.conn) {
+        console.log('Using cached MongoDB connection');
+        return cached.conn;
+    }
+
+    // If connection is in progress, return existing promise
+    if (cached.promise) {
+        console.log('MongoDB connection in progress, waiting...');
+        cached.conn = await cached.promise;
+        return cached.conn;
+    }
+
     try {
         const options: mongoose.ConnectOptions = {
             maxPoolSize: 10, // Maintain up to 10 socket connections
@@ -20,11 +42,21 @@ const connectDB = async () => {
             ? env.MONGO_URI.replace('/?', '/cameronhighlandstours?')
             : env.MONGO_URI + '/cameronhighlandstours'
 
-        await mongoose.connect(connectionUri, options)
-        console.log("MongoDB Connected with optimized settings")
+        console.log('Connecting to MongoDB...');
+        
+        // Create new connection promise
+        cached.promise = mongoose.connect(connectionUri, options);
+        cached.conn = await cached.promise;
+        
+        console.log("MongoDB Connected with optimized settings for serverless");
+        
+        return cached.conn;
     } catch (error) {
+        // Reset cache on error
+        cached.promise = null;
+        cached.conn = null;
         console.error("MongoDB Connection Error:", error)
-        process.exit(1)
+        throw error;
     }
 }
 
