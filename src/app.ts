@@ -36,6 +36,9 @@ app.use('/webhook', express.raw({ type: 'application/json' }), webhookRoutes);
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
+app.get("/health", (req, res) => {
+    res.send("Welcome to the Cameron Hghlands Tours API")
+})
 app.use("/api/tours", tourRoutes)
 app.use("/api/transfers", transferRoutes)
 app.use("/api/bookings", bookingRoutes)
