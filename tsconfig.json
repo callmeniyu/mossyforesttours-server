@@ -11,8 +11,9 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
         "resolveJsonModule": true,
-    "moduleResolution": "node",
-    "allowSyntheticDefaultImports": true
+        "moduleResolution": "node",
+        "allowSyntheticDefaultImports": true,
+        "types": ["node"]
     },
     "include": ["src/**/*"],
     "exclude": ["node_modules", "dist"]
