@@ -288,12 +288,12 @@ export class BrevoEmailService {
           <title>Email Test</title>
         </head>
         <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <div style="background: #0C7157; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
+          <div style="background: #0F172A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0;">
             <h1 style="margin: 0; font-size: 24px;">✅ Email Configuration Test</h1>
             <p style="margin: 10px 0 0 0;">Brevo API integration is working!</p>
           </div>
           <div style="background: #f9f9f9; padding: 20px; border-radius: 0 0 8px 8px;">
-            <h2 style="color: #0C7157; margin-top: 0;">Test Results:</h2>
+            <h2 style="color: #E2A45A; margin-top: 0;">Test Results:</h2>
             <ul style="background: white; padding: 20px; border-radius: 6px; margin: 15px 0;">
               <li><strong>✓ Brevo API Connection:</strong> Successful</li>
               <li><strong>✓ Email Delivery:</strong> Working</li>
@@ -301,7 +301,7 @@ export class BrevoEmailService {
               <li><strong>✓ Sender Configuration:</strong> ${emailConfig.from.name} &lt;${emailConfig.from.email}&gt;</li>
             </ul>
             <p><strong>Sent at:</strong> ${new Date().toLocaleString()}</p>
-            <p style="margin-top: 20px; padding: 15px; background: #e8f8f5; border-left: 4px solid #0C7157; border-radius: 4px;">
+            <p style="margin-top: 20px; padding: 15px; background: #FFF5E6; border-left: 4px solid #E2A45A; border-radius: 4px;">
               <strong>✅ Your booking confirmation emails will now be delivered successfully!</strong><br>
               The SMTP port blocking issue has been resolved using Brevo's HTTP API.
             </p>
@@ -359,7 +359,7 @@ export class BrevoEmailService {
       </head>
       <body style="font-family: Arial, sans-serif; color: #222;">
         <div style="max-width:600px;margin:0 auto;padding:20px;background:#fff;border-radius:8px;">
-          <h2 style="color:#0C7157">New Feedback Received</h2>
+          <h2 style="color:#E2A45A">New Feedback Received</h2>
           <p><strong>From:</strong> ${senderName} &lt;${senderEmail}&gt;</p>
           <hr />
           <h3>Message</h3>
@@ -465,36 +465,36 @@ export class BrevoEmailService {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.6; color: #222; background: #f6f6f6; }
             .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px rgba(12,113,87,0.08); }
-            .header { background: linear-gradient(135deg, #0C7157, #0C7157); padding: 0; position: relative; overflow: hidden; }
+            .header { background: linear-gradient(135deg, #0F172A, #1E293B); padding: 0; position: relative; overflow: hidden; }
             .header-content { position: relative; z-index: 2; padding: 40px 30px; text-align: center; color: white; }
             .text-logo { font-family: 'Poppins', sans-serif; font-weight: 500; font-size: 32px; margin-bottom: 20px; letter-spacing: 1px; color: white; }
             .header h1 { font-family: 'Poppins', sans-serif; font-size: 28px; font-weight: 600; margin-bottom: 10px; text-shadow: 0 2px 4px rgba(0,0,0,0.18); }
             .header p { font-family: 'Poppins', sans-serif; font-size: 16px; opacity: 0.95; font-weight: 400; }
             .content { padding: 40px 30px; }
-            .greeting { font-family: 'Poppins', sans-serif; font-size: 18px; color: #0C7157; margin-bottom: 20px; font-weight: 600; }
+            .greeting { font-family: 'Poppins', sans-serif; font-size: 18px; color: #E2A45A; margin-bottom: 20px; font-weight: 600; }
             /* Booking details improvements */
             .booking-details { background: #ffffff; border-radius: 10px; padding: 0; margin: 20px 0; border: 1px solid #e6e9eb; overflow: hidden; }
-            .booking-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 20px; background: linear-gradient(90deg, rgba(12,113,87,0.03), rgba(12,113,87,0.02)); }
+            .booking-header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 20px; background: linear-gradient(90deg, rgba(15,23,42,0.03), rgba(15,23,42,0.02)); }
             .booking-header-left { flex:1; }
-            .package-title { font-size:18px; font-weight:700; color:#0C7157; margin-bottom:6px; }
+            .package-title { font-size:18px; font-weight:700; color:#0F172A; margin-bottom:6px; }
             .booking-ref { color:#6b7280; font-size:13px; }
             .amount-badge { text-align:right; min-width:130px; }
             .amount-badge .label { font-size:12px; color:rgba(255,255,255,0.9); text-transform:uppercase; letter-spacing:0.6px; }
-            .amount-badge .amount { font-size:20px; font-weight:800; color:#0C7157; background: #e8faf5; padding:10px 12px; border-radius:8px; display:inline-block; }
+            .amount-badge .amount { font-size:20px; font-weight:800; color:#0F172A; background: #FFF5E6; padding:10px 12px; border-radius:8px; display:inline-block; }
             .booking-footer { padding: 12px 20px 20px; display:flex; justify-content:flex-end; align-items:center; }
             .booking-footer .paid { font-size:12px; color:#6b7280; margin-right:12px; }
-            .booking-footer .total { font-size:20px; font-weight:800; color:#0C7157; }
+            .booking-footer .total { font-size:20px; font-weight:800; color:#0F172A; }
             .booking-body { padding: 16px 20px 20px 20px; background: #f9fafb; }
             /* make each detail row span full width so label is left and value is right */
             /* Use table layout for maximum email-client compatibility */
             .details-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
             .details-table td.label { width: 48%; padding: 8px 0; font-family: 'Poppins', sans-serif; font-weight: 600; color: #374151; font-size:13px; vertical-align: top; }
-            .details-table td.value { width: 52%; padding: 8px 0; font-family: 'Poppins', sans-serif; color: #0C7157; font-weight: 700; font-size:13px; text-align: right; vertical-align: top; }
+            .details-table td.value { width: 52%; padding: 8px 0; font-family: 'Poppins', sans-serif; color: #E2A45A; font-weight: 700; font-size:13px; text-align: right; vertical-align: top; }
             .details-table tr + tr td { border-top: 1px solid #eef2f4; }
-            .total-row { background: #0C7157; color: #fff; margin: 15px -20px -20px -20px; padding: 18px 20px; border-radius: 0 0 8px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+            .total-row { background: #0F172A; color: #fff; margin: 15px -20px -20px -20px; padding: 18px 20px; border-radius: 0 0 8px 8px; display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
             .info-box { background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 25px 0; }
             .footer { background: #222; color: #fff; padding: 30px; text-align: center; border-radius: 0 0 12px 12px; }
-            .footer a { color: #0C7157; text-decoration: none; }
+            .footer a { color: #E2A45A; text-decoration: none; }
             .email-text { font-family: 'Poppins', sans-serif; }
             @media (max-width: 600px) {
                 .container { border-radius: 0; }
@@ -508,7 +508,7 @@ export class BrevoEmailService {
         <div class="container">
             <div class="header">
                 <div class="header-content">
-                    <div class="text-logo">Oastel</div>
+                    <div class="text-logo">Cameron Highlands Tours</div>
                     <h1>✅ Booking Confirmed!</h1>
                     <p>Your adventure awaits</p>
                 </div>
@@ -611,9 +611,9 @@ export class BrevoEmailService {
         </div>
 
         ${booking.pickupGuidelines ? `
-        <div class="info-box" style="background: #e8f8f5; border: 1px solid #0C7157;">
-          <h3 style="color: #0C7157; margin-bottom: 10px; font-weight: 600;">📍 Pickup Guidelines:</h3>
-          <p style="color: #0C7157; line-height: 1.8; margin: 0;">${booking.pickupGuidelines}</p>
+        <div class="info-box" style="background: #FFF5E6; border: 1px solid #E2A45A;">
+          <h3 style="color: #0F172A; margin-bottom: 10px; font-weight: 600;">📍 Pickup Guidelines:</h3>
+          <p style="color: #4B5563; line-height: 1.8; margin: 0;">${booking.pickupGuidelines}</p>
         </div>
         ` : ''}
 
@@ -621,7 +621,7 @@ export class BrevoEmailService {
                     If you have any questions please don't hesitate to contact us. We're here to make your experience unforgettable!
                 </p>
 
-                <p class="email-text" style="margin-top: 20px; color: #0C7157; font-weight: 600;">
+                <p class="email-text" style="margin-top: 20px; color: #E2A45A; font-weight: 600;">
                     Safe travels and see you soon!
                 </p>
             </div>
@@ -700,13 +700,13 @@ export class BrevoEmailService {
       const formattedTotal = typeof booking.total === 'number' ? booking.total.toFixed(2) : Number(booking.total || 0).toFixed(2);
 
       return `
-        <div style="background: #f9f9f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #0C7157;">
+        <div style="background: #f9f9f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #E2A45A;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <div>
-              <div style="font-size: 16px; color: #0C7157; font-weight: 600;">Booking #${index + 1} - ${booking.packageName}</div>
+              <div style="font-size: 16px; color: #E2A45A; font-weight: 600;">Booking #${index + 1} - ${booking.packageName}</div>
               <div style="color: #666; font-size: 13px;">ID: #${String(booking.bookingId || '').slice(-8).toUpperCase()}</div>
             </div>
-            <div style="background: #0C7157; color: white; padding: 8px 12px; border-radius: 6px;">
+            <div style="background: #0F172A; color: white; padding: 8px 12px; border-radius: 6px;">
               <div style="font-size: 16px; font-weight: 700;">${cartData.currency} ${formattedTotal}</div>
             </div>
           </div>
@@ -721,9 +721,9 @@ export class BrevoEmailService {
             `}
             ${booking.pickupLocation ? `<div><strong>Pickup:</strong> ${booking.pickupLocation}</div>` : ''}
             ${booking.pickupGuidelines ? `
-            <div style="margin-top: 10px; padding: 10px; background: #e8f8f5; border-radius: 6px; border-left: 3px solid #0C7157;">
-              <div style="font-weight: 600; color: #0C7157; margin-bottom: 5px;">📍 Pickup Guidelines:</div>
-              <div style="color: #0C7157; font-size: 13px; line-height: 1.6;">${booking.pickupGuidelines}</div>
+            <div style="margin-top: 10px; padding: 10px; background: #FFF5E6; border-radius: 6px; border-left: 3px solid #E2A45A;">
+              <div style="font-weight: 600; color: #0F172A; margin-bottom: 5px;">📍 Pickup Guidelines:</div>
+              <div style="color: #4B5563; font-size: 13px; line-height: 1.6;">${booking.pickupGuidelines}</div>
             </div>
             ` : ''}
           </div>
@@ -743,18 +743,18 @@ export class BrevoEmailService {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: 'Poppins', Arial, sans-serif; line-height: 1.6; color: #222; background: #f6f6f6; }
             .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; box-shadow: 0 2px 16px rgba(12,113,87,0.08); }
-            .header { background: linear-gradient(135deg, #0C7157, #0C7157); padding: 40px 30px; text-align: center; color: white; border-radius: 12px 12px 0 0; }
+            .header { background: linear-gradient(135deg, #0F172A, #1E293B); padding: 40px 30px; text-align: center; color: white; border-radius: 12px 12px 0 0; }
             .text-logo { font-size: 32px; font-weight: 500; margin-bottom: 20px; letter-spacing: 1px; }
             .content { padding: 40px 30px; }
-            .greeting { font-size: 18px; color: #0C7157; margin-bottom: 20px; font-weight: 600; }
-            .summary-box { background: #e8f8f5; border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #0C7157; }
+            .greeting { font-size: 18px; color: #E2A45A; margin-bottom: 20px; font-weight: 600; }
+            .summary-box { background: #FFF5E6; border-radius: 12px; padding: 20px; margin: 20px 0; border-left: 4px solid #E2A45A; }
             .summary-grid { display: flex; justify-content: space-between; text-align: center; }
             .summary-item { flex: 1; }
-            .summary-number { font-size: 28px; font-weight: 700; color: #0C7157; margin-bottom: 5px; }
+            .summary-number { font-size: 28px; font-weight: 700; color: #E2A45A; margin-bottom: 5px; }
             .summary-label { font-size: 14px; color: #666; }
-            .total-row { background: #0C7157; color: #fff; margin: 25px -30px -30px -30px; padding: 25px 30px; border-radius: 0 0 12px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: 700; }
+            .total-row { background: #0F172A; color: #fff; margin: 25px -30px -30px -30px; padding: 25px 30px; border-radius: 0 0 12px 12px; display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: 700; }
             .footer { background: #222; color: #fff; padding: 30px; text-align: center; border-radius: 0 0 12px 12px; }
-            .footer a { color: #0C7157; text-decoration: none; }
+            .footer a { color: #E2A45A; text-decoration: none; }
             @media (max-width: 600px) {
                 .container { border-radius: 0; }
                 .content { padding: 20px 15px; }
@@ -766,7 +766,7 @@ export class BrevoEmailService {
     <body>
         <div class="container">
             <div class="header">
-                <div class="text-logo">Oastel</div>
+                <div class="text-logo">Cameron Highlands Tours</div>
                 <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 10px;">✅ Multiple Bookings Confirmed!</h1>
                 <p style="font-size: 16px; opacity: 0.95;">Your adventures await</p>
             </div>
@@ -792,7 +792,7 @@ export class BrevoEmailService {
                     </div>
                 </div>
 
-                <h3 style="color: #0C7157; margin: 30px 0 15px 0;">Your Bookings:</h3>
+                <h3 style="color: #E2A45A; margin: 30px 0 15px 0;">Your Bookings:</h3>
                 ${bookingRows}
 
         <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 20px; margin: 25px 0;">
@@ -817,7 +817,7 @@ export class BrevoEmailService {
                     If you have any questions please don't hesitate to contact us. We're here to make your experience unforgettable!
                 </p>
 
-                <p style="margin-top: 20px; color: #0C7157; font-weight: 600;">
+                <p style="margin-top: 20px; color: #E2A45A; font-weight: 600;">
                     Safe travels and see you soon!
                 </p>
             </div>
@@ -869,13 +869,13 @@ export class BrevoEmailService {
     return `
         <div class="container">
             <div class="header">
-                <div style="font-size: 32px; font-weight: 500; margin-bottom: 20px;">Oastel</div>
+                <div style="font-size: 32px; font-weight: 500; margin-bottom: 20px;">Cameron Highlands Tours</div>
                 <h1 style="font-size: 28px; margin-bottom: 10px;">🌟 How was your experience?</h1>
                 <p>We'd love to hear from you!</p>
             </div>
 
             <div class="content">
-                <div style="font-size: 18px; color: #0C7157; margin-bottom: 20px; font-weight: 600;">Hello ${reviewData.customerName}!</div>
+                <div style="font-size: 18px; color: #E2A45A; margin-bottom: 20px; font-weight: 600;">Hello ${reviewData.customerName}!</div>
                 
                 <p>Thank you for choosing ${emailConfig.from.name} for your recent ${reviewData.packageType === 'tour' ? 'tour' : 'transfer'}: <strong>${reviewData.packageName}</strong> on ${formatDate(reviewData.date)}.</p>
 
@@ -885,8 +885,8 @@ export class BrevoEmailService {
                     <a href="${reviewData.reviewFormUrl}" class="cta-button">Share Your Review</a>
                 </div>
 
-                <div style="background: #e8f8f5; padding: 20px; border-radius: 8px; margin: 25px 0;">
-                    <h3 style="color: #0C7157; margin-bottom: 10px;">Booking Details:</h3>
+                <div style="background: #FFF5E6; padding: 20px; border-radius: 8px; margin: 25px 0;">
+                    <h3 style="color: #0F172A; margin-bottom: 10px;">Booking Details:</h3>
                     <p><strong>Service:</strong> ${reviewData.packageName}</p>
                     <p><strong>Date:</strong> ${formatDate(reviewData.date)}</p>
                     <p><strong>Booking ID:</strong> #${reviewData.bookingId.slice(-8).toUpperCase()}</p>
@@ -954,14 +954,14 @@ export class BrevoEmailService {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; }
             .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; }
-            .header { background: #dc2626; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header { background: #0F172A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
             .content { padding: 20px; }
             .booking-details { background: #f9f9f9; border-radius: 8px; padding: 20px; margin: 20px 0; }
             .detail-row { display: flex; justify-content: space-between; margin-bottom: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
             .detail-label { font-weight: bold; color: #555; }
             .detail-value { color: #333; }
-            .total-row { background: #dc2626; color: white; padding: 15px; border-radius: 6px; margin-top: 15px; }
-            .urgent { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 15px; border-radius: 6px; margin: 15px 0; }
+            .total-row { background: #0F172A; color: white; padding: 15px; border-radius: 6px; margin-top: 15px; }
+            .urgent { background: #FFF5E6; border: 1px solid #E2A45A; color: #0F172A; padding: 15px; border-radius: 6px; margin: 15px 0; }
         </style>
     </head>
     <body>
@@ -976,7 +976,7 @@ export class BrevoEmailService {
                     <strong>🚨 ACTION REQUIRED:</strong> A new booking has been placed and requires your attention.
                 </div>
                 
-                <h2 style="color: #dc2626; margin-bottom: 15px;">Booking Details</h2>
+                <h2 style="color: #E2A45A; margin-bottom: 15px;">Booking Details</h2>
                 
                 <div class="booking-details">
                     <div class="detail-row">
@@ -1059,7 +1059,7 @@ export class BrevoEmailService {
                     </div>
                 </div>
                 
-                <div style="background: #e8f8f5; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <div style="background: #FFF5E6; padding: 15px; border-radius: 6px; margin: 20px 0;">
                     <p><strong>⏰ Booking Time:</strong> ${new Date().toLocaleString()}</p>
                     <p><strong>📧 Confirmation Email:</strong> Sent to customer at ${booking.customerEmail}</p>
                 </div>
@@ -1114,8 +1114,8 @@ export class BrevoEmailService {
     const bookingRows = cartData.bookings.map((booking, index) => `
       <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-          <h4 style="color: #dc2626; margin: 0;">Booking ${index + 1}</h4>
-          <span style="background: #dc2626; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">
+          <h4 style="color: #E2A45A; margin: 0;">Booking ${index + 1}</h4>
+          <span style="background: #0F172A; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;">
             #${booking.bookingId.slice(-6).toUpperCase()}
           </span>
         </div>
@@ -1135,13 +1135,13 @@ export class BrevoEmailService {
           <div style="grid-column: 1 / -1;"><strong>Pickup:</strong> ${booking.pickupLocation}</div>
           ` : ''}
           ${booking.pickupGuidelines ? `
-          <div style="grid-column: 1 / -1; background: #f0f9ff; padding: 8px; border-radius: 4px; border-left: 3px solid #dc2626;">
-            <strong style="color: #dc2626;">📍 Pickup Guidelines:</strong><br>
+          <div style="grid-column: 1 / -1; background: #FFF5E6; padding: 8px; border-radius: 4px; border-left: 3px solid #E2A45A;">
+            <strong style="color: #0F172A;">📍 Pickup Guidelines:</strong><br>
             <span style="color: #374151; font-size: 13px;">${booking.pickupGuidelines}</span>
           </div>
           ` : ''}
           <div style="grid-column: 1 / -1; text-align: right; margin-top: 8px;">
-            <strong style="color: #dc2626; font-size: 16px;">${cartData.currency} ${booking.total.toFixed(2)}</strong>
+            <strong style="color: #E2A45A; font-size: 16px;">${cartData.currency} ${booking.total.toFixed(2)}</strong>
           </div>
         </div>
       </div>
@@ -1158,11 +1158,11 @@ export class BrevoEmailService {
             * { margin: 0; padding: 0; box-sizing: border-box; }
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; background: #f6f6f6; }
             .container { max-width: 600px; margin: 0 auto; background: #fff; border-radius: 8px; }
-            .header { background: #dc2626; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+            .header { background: #0F172A; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
             .content { padding: 20px; }
-            .summary { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 20px; margin: 20px 0; }
-            .urgent { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; padding: 15px; border-radius: 6px; margin: 15px 0; }
-            .total-summary { background: #dc2626; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
+            .summary { background: #FFF5E6; border: 1px solid #E2A45A; border-radius: 8px; padding: 20px; margin: 20px 0; }
+            .urgent { background: #FFF5E6; border: 1px solid #E2A45A; color: #0F172A; padding: 15px; border-radius: 6px; margin: 15px 0; }
+            .total-summary { background: #0F172A; color: white; padding: 20px; border-radius: 8px; text-align: center; margin: 20px 0; }
         </style>
     </head>
     <body>
@@ -1178,13 +1178,13 @@ export class BrevoEmailService {
                 </div>
                 
                 <div class="summary">
-                    <h3 style="color: #dc2626; margin-bottom: 15px;">Customer Information</h3>
+                    <h3 style="color: #E2A45A; margin-bottom: 15px;">Customer Information</h3>
                     <p><strong>Name:</strong> ${cartData.customerName}</p>
                     <p><strong>Email:</strong> ${cartData.customerEmail}</p>
                     <p><strong>Booking Time:</strong> ${new Date().toLocaleString()}</p>
                 </div>
                 
-                <h3 style="color: #dc2626; margin: 25px 0 15px 0;">All Bookings (${cartData.bookings.length} items):</h3>
+                <h3 style="color: #E2A45A; margin: 25px 0 15px 0;">All Bookings (${cartData.bookings.length} items):</h3>
                 ${bookingRows}
                 
                 <div class="total-summary">
@@ -1194,7 +1194,7 @@ export class BrevoEmailService {
                     </div>
                 </div>
                 
-                <div style="background: #e8f8f5; padding: 15px; border-radius: 6px; margin: 20px 0;">
+                <div style="background: #FFF5E6; padding: 15px; border-radius: 6px; margin: 20px 0;">
                     <p><strong>📧 Customer Notification:</strong> A consolidated confirmation email has been sent to ${cartData.customerEmail}</p>
                     <p><strong>💳 Payment Status:</strong> All bookings are pending payment confirmation</p>
                 </div>

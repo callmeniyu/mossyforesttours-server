@@ -15,13 +15,35 @@ class BookingService {
         status: 'confirmed',
         ...additionalFilter,
         date: { $lt: new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1) }
-      }).select('_id');
+      }).select('_id packageType packageId adults children');
 
       if (bookingsToComplete.length === 0) return;
 
       const ids = bookingsToComplete.map(b => b._id);
       await BookingModel.updateMany({ _id: { $in: ids } }, { $set: { status: 'completed' } });
       console.log(`✅ Marked ${ids.length} booking(s) as completed`);
+
+      // Increment bookedCount for each tour/transfer
+      const TourModel = mongoose.model('Tour');
+      const TransferModel = mongoose.model('Transfer');
+      
+      for (const booking of bookingsToComplete) {
+        const totalGuests = (booking.adults || 0) + (booking.children || 0);
+        
+        if (booking.packageType === 'tour') {
+          await TourModel.findByIdAndUpdate(
+            booking.packageId,
+            { $inc: { bookedCount: totalGuests } }
+          );
+          console.log(`📊 Incremented tour ${booking.packageId} bookedCount by ${totalGuests}`);
+        } else if (booking.packageType === 'transfer') {
+          await TransferModel.findByIdAndUpdate(
+            booking.packageId,
+            { $inc: { bookedCount: totalGuests } }
+          );
+          console.log(`📊 Incremented transfer ${booking.packageId} bookedCount by ${totalGuests}`);
+        }
+      }
     } catch (err) {
       console.error('Error marking past bookings completed:', err);
     }
@@ -238,43 +260,9 @@ class BookingService {
       if (booking) {
         console.log(`✅ Booking ${booking._id} marked confirmed via Stripe event`);
 
-        // Send confirmation email using existing Brevo service
-        try {
-          const emailService = new EmailService();
-
-          // Prepare email data for existing email service
-          const emailData = {
-            customerName: booking.contactInfo.name,
-            customerEmail: booking.contactInfo.email,
-            bookingId: booking._id.toString(),
-            packageId: booking.packageId._id.toString(),
-            packageName: (booking.packageId as any).name || (booking.packageId as any).title,
-            packageType: booking.packageType,
-            from: (booking as any).from, // Safely access if property exists
-            to: (booking as any).to,
-            date: booking.date.toISOString().split('T')[0], // Format date as YYYY-MM-DD
-            time: booking.time,
-            adults: booking.adults,
-            children: booking.children,
-            pickupLocation: booking.pickupLocation,
-            pickupGuidelines: (booking.packageId as any).pickupGuidelines,
-            total: booking.total,
-            currency: booking.paymentInfo.currency || 'MYR',
-            isVehicleBooking: booking.isVehicleBooking,
-            vehicleName: (booking as any).vehicleName,
-            vehicleSeatCapacity: booking.vehicleSeatCapacity,
-          };
-
-          const emailSent = await emailService.sendBookingConfirmation(emailData);
-          if (emailSent) {
-            console.log(`📧 Confirmation email sent to ${booking.contactInfo.email} for booking ${booking._id}`);
-          } else {
-            console.warn(`⚠️ Failed to send confirmation email for booking ${booking._id}`);
-          }
-        } catch (emailError) {
-          console.error(`❌ Error sending confirmation email for booking ${booking._id}:`, emailError);
-          // Don't fail the payment processing if email fails
-        }
+        // NOTE: Email sending is handled by the confirmPayment endpoint, not here
+        // This avoids duplicate emails and ensures emails are sent even if webhook fires first
+        console.log(`📧 Email will be sent by confirmPayment endpoint for booking ${booking._id}`);
       }
 
       return booking;

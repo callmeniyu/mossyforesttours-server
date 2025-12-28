@@ -12,14 +12,14 @@ export const emailConfig = {
     }
   },
   from: {
-    name: process.env.FROM_NAME || 'Oastel Travel',
-    email: process.env.FROM_EMAIL || process.env.SMTP_USER || 'noreply@oastel.com',
+    name: process.env.FROM_NAME || 'Cameron Highlands Tours',
+    email: process.env.FROM_EMAIL || process.env.SMTP_USER || 'noreply@cameronhighlandstours.com',
   },
   templates: {
-    logo: process.env.COMPANY_LOGO || 'https://your-domain.com/logo.png',
-    website: process.env.COMPANY_WEBSITE || 'https://oastel.com',
-    supportEmail: process.env.SUPPORT_EMAIL || 'support@oastel.com',
-    supportPhone: process.env.SUPPORT_PHONE || '+60 12-345 6789',
-    notificationEmail: process.env.NOTIFICATION_EMAIL || 'oastel.com@gmail.com', // Admin notification email
+    logo: process.env.COMPANY_LOGO || 'https://cameronhighlandstours.com/logo.png',
+    website: process.env.COMPANY_WEBSITE || 'https://cameronhighlandstours.com',
+    supportEmail: process.env.SUPPORT_EMAIL || 'support@cameronhighlandstours.com',
+    supportPhone: process.env.SUPPORT_PHONE || '+60 19-659 2141',
+    notificationEmail: process.env.NOTIFICATION_EMAIL || 'cameronhighlandstours@gmail.com', // Admin notification email
   }
 };

@@ -39,6 +39,8 @@ export interface Booking extends Document {
   isVehicleBooking?: boolean;
   vehicleSeatCapacity?: number;
   seatsRequested?: number;
+  confirmationEmailSent?: boolean;
+  confirmationEmailSentAt?: Date;
   reviewEmailSent?: boolean;
   reviewEmailSentAt?: Date;
   createdAt: Date;
@@ -89,6 +91,8 @@ const BookingSchema: Schema = new Schema(
   isVehicleBooking: { type: Boolean, default: false },
   vehicleSeatCapacity: { type: Number },
   seatsRequested: { type: Number },
+    confirmationEmailSent: { type: Boolean, default: false },
+    confirmationEmailSentAt: { type: Date },
     reviewEmailSent: { type: Boolean, default: false },
     reviewEmailSentAt: { type: Date },
   },

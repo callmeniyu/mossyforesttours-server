@@ -369,7 +369,7 @@ export class EmailService {
             <!-- Header -->
             <div class="header">
             <div class="header-content">
-                <div class="text-logo">Oastel</div>
+                <div class="text-logo">Cameron Highlands Tours</div>
                 <h1>
                         <svg class="icon success-icon" style="width: 24px; height: 24px; margin-right: 8px;" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
@@ -1085,7 +1085,7 @@ export class EmailService {
             <!-- Header -->
             <div class="header">
                 <div class="header-content">
-                    <div class="text-logo">Oastel</div>
+                    <div class="text-logo">Cameron Highlands Tours</div>
                     <h1>
                         <svg style="width: 24px; height: 24px; margin-right: 8px;" fill="currentColor" viewBox="0 0 20 20">
                             <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>

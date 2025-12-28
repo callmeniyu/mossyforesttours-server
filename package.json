@@ -6,7 +6,8 @@
         "dev": "ts-node-dev --respawn src/server.ts",
         "build": "tsc",
         "start": "node dist/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+        "test-email": "ts-node test-email.ts",
+        "test": "echo \"Error: no test specified\" && exit 1"
     },
     "keywords": [],
     "author": "",

@@ -24,6 +24,8 @@ export interface TransferType extends Document {
     duration: string
     status: "active" | "sold"
     bookedCount: number
+    rating?: number  // Average rating out of 5
+    reviewCount?: number  // Number of reviews
     oldPrice: number
     newPrice: number
     childPrice: number
@@ -54,6 +56,8 @@ const TransferSchema = new Schema<TransferType>(
         duration: String,
         status: { type: String, enum: ["active", "sold"], default: "active" },
         bookedCount: { type: Number, default: 0 },
+        rating: { type: Number, default: 0 },
+        reviewCount: { type: Number, default: 0 },
         oldPrice: Number,
         newPrice: Number,
         childPrice: Number,

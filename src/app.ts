@@ -11,14 +11,14 @@ import blackoutDateRoutes from "./routes/blackoutDate.routes"
 import blogRoutes from "./routes/blog.routes"
 import uploadRoutes from "./routes/upload.routes"
 import timeSlotRoutes from "./routes/timeSlot.routes"
-import cartRoutes from "./routes/cart.routes"
-import cartBookingRoutes from "./routes/cartBooking.routes"
 import userRoutes from "./routes/user.routes"
 import emailRoutes from "./routes/email.routes"
 import vehicleRoutes from "./routes/vehicle.routes"
 import rollingTimeslotRoutes from "./routes/rollingTimeslot.routes"
 import paymentRoutes from "./routes/payment.routes"
 import paymentDebugRoutes from "./routes/paymentDebug.routes"
+import reviewRoutes from "./routes/review.routes"
+import currencyRoutes from "./routes/currency.routes"
 import { PaymentCleanupService } from "./services/paymentCleanup.service"
 
 const app = express()
@@ -44,8 +44,6 @@ app.use("/api/blogs", blogRoutes)
 app.use("/api/upload", uploadRoutes)
 console.log("🔗 Registering timeslots routes at /api/timeslots")
 app.use("/api/timeslots", timeSlotRoutes)
-app.use("/api/cart", cartRoutes)
-app.use("/api/cart-booking", cartBookingRoutes)
 app.use("/api/users", userRoutes)
 app.use("/api/email", emailRoutes)
 // Vehicle management for private transfers
@@ -56,6 +54,10 @@ app.use("/api/rolling-timeslots", rollingTimeslotRoutes)
 app.use("/api/payments", paymentRoutes)
 // Payment debugging
 app.use("/api/payment-debug", paymentDebugRoutes)
+// Review and rating system
+app.use("/api/reviews", reviewRoutes)
+// Currency exchange rates
+app.use("/api/currency", currencyRoutes)
 
 // Automatic payment cleanup disabled - can be triggered manually via API if needed
 // Manual cleanup endpoint: POST /api/payment/cleanup-abandoned

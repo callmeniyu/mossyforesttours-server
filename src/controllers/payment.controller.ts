@@ -246,12 +246,12 @@ export class PaymentController {
         // Handle cart booking - find existing bookings by payment intent ID
         console.log('[PAYMENT] Cart booking - finding existing bookings...');
         
+        // Look for bookings with either pending OR succeeded status (webhook may have already updated)
         const existingBookings = await Booking.find({
           $or: [
             { 'paymentInfo.stripePaymentIntentId': paymentIntent.id },
             { 'paymentInfo.paymentIntentId': paymentIntent.id }
-          ],
-          'paymentInfo.paymentStatus': 'pending'
+          ]
         });
 
         console.log('[PAYMENT] Found existing bookings:', existingBookings.length);
@@ -281,25 +281,42 @@ export class PaymentController {
             data: cartResult
           };
         } else {
-          // Update existing bookings payment status AND update slot counts
-          const updateResult = await Booking.updateMany(
-            { $or: [ { 'paymentInfo.stripePaymentIntentId': paymentIntent.id }, { 'paymentInfo.paymentIntentId': paymentIntent.id } ] },
-            { 
-              $set: { 
-                'paymentInfo.paymentStatus': 'succeeded',
-                'paymentInfo.paymentMethod': 'stripe',
-                'paymentInfo.stripePaymentIntentId': paymentIntent.id,
-                'paymentInfo.paymentIntentId': paymentIntent.id
+          // Update existing bookings payment status AND update slot counts (if not already done)
+          const pendingBookings = existingBookings.filter((b: any) => b.paymentInfo?.paymentStatus === 'pending');
+          const alreadyConfirmed = existingBookings.filter((b: any) => b.paymentInfo?.paymentStatus === 'succeeded');
+          
+          console.log('[PAYMENT] Pending bookings:', pendingBookings.length);
+          console.log('[PAYMENT] Already confirmed by webhook:', alreadyConfirmed.length);
+          
+          if (pendingBookings.length > 0) {
+            const updateResult = await Booking.updateMany(
+              { 
+                $or: [ 
+                  { 'paymentInfo.stripePaymentIntentId': paymentIntent.id }, 
+                  { 'paymentInfo.paymentIntentId': paymentIntent.id } 
+                ],
+                'paymentInfo.paymentStatus': 'pending'
+              },
+              { 
+                $set: { 
+                  'paymentInfo.paymentStatus': 'succeeded',
+                  'paymentInfo.paymentMethod': 'stripe',
+                  'paymentInfo.stripePaymentIntentId': paymentIntent.id,
+                  'paymentInfo.paymentIntentId': paymentIntent.id
+                }
               }
-            }
-          );
+            );
 
-          console.log('[PAYMENT] Updated', updateResult.modifiedCount, 'existing bookings');
+            console.log('[PAYMENT] Updated', updateResult.modifiedCount, 'existing bookings');
+          } else {
+            console.log('[PAYMENT] All bookings already confirmed (likely by webhook)');
+          }
 
           // Update slot counts for each existing booking (now that payment is confirmed)
+          // Only update slots for bookings that were pending (webhook doesn't update slots)
           try {
             const { TimeSlotService } = require('../services/timeSlot.service');
-            for (const booking of existingBookings) {
+            for (const booking of pendingBookings) {
               const totalGuests = (booking.adults || 0) + (booking.children || 0);
               
               // Convert booking date to YYYY-MM-DD Malaysia timezone for timeslot lookup
@@ -342,9 +359,17 @@ export class PaymentController {
         // Send cart confirmation email after payment success
         if (bookingResult.success && bookingData?.contactInfo?.email) {
           try {
-            // Fetch package details for proper package names in email
-            const bookingsWithPackageNames = await Promise.all(
-              bookingResult.data.map(async (booking: any) => {
+            // Check if confirmation email has already been sent for any of these bookings
+            const bookingsNeedingEmail = bookingResult.data.filter((b: any) => !b.confirmationEmailSent);
+            
+            if (bookingsNeedingEmail.length === 0) {
+              console.log('[PAYMENT] ✅ Confirmation email already sent for all cart bookings');
+            } else {
+              console.log(`[PAYMENT] Sending confirmation email for ${bookingsNeedingEmail.length} cart bookings...`);
+              
+              // Fetch package details for proper package names in email
+              const bookingsWithPackageNames = await Promise.all(
+                bookingResult.data.map(async (booking: any) => {
                 let packageName = booking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service';
                 
                 try {
@@ -406,8 +431,21 @@ export class PaymentController {
             
             if (emailSent) {
               console.log('[PAYMENT] ✅ Cart confirmation email sent successfully');
+              
+              // Mark all bookings as having confirmation email sent
+              await Booking.updateMany(
+                { _id: { $in: bookingResult.bookingIds } },
+                { 
+                  $set: { 
+                    confirmationEmailSent: true,
+                    confirmationEmailSentAt: new Date()
+                  }
+                }
+              );
+              console.log('[PAYMENT] ✅ Marked bookings as confirmation email sent');
             } else {
               console.error('[PAYMENT] ⚠️ Cart confirmation email failed to send');
+            }
             }
           } catch (emailError) {
             console.error('[PAYMENT] ❌ Failed to send cart confirmation email:', emailError);
@@ -425,55 +463,61 @@ export class PaymentController {
         // Handle single booking - find existing booking by payment intent ID
         console.log('[PAYMENT] Single booking - finding existing booking...');
         
+        // Look for booking with either pending OR succeeded status (webhook may have already updated)
         const existingBooking = await Booking.findOne({
-          'paymentInfo.paymentIntentId': paymentIntent.id,
-          'paymentInfo.paymentStatus': 'pending'
+          'paymentInfo.paymentIntentId': paymentIntent.id
         });
 
         if (existingBooking) {
-          // Update existing booking payment status AND update slot counts
-          existingBooking.paymentInfo.paymentStatus = 'succeeded';
-          existingBooking.paymentInfo.paymentMethod = 'stripe';
-          const savedBooking = await existingBooking.save();
+          const wasAlreadyConfirmed = existingBooking.paymentInfo?.paymentStatus === 'succeeded';
+          
+          if (wasAlreadyConfirmed) {
+            console.log('[PAYMENT] Booking already confirmed by webhook:', existingBooking._id);
+          } else {
+            // Update existing booking payment status AND update slot counts
+            existingBooking.paymentInfo.paymentStatus = 'succeeded';
+            existingBooking.paymentInfo.paymentMethod = 'stripe';
+            const savedBooking = await existingBooking.save();
 
-          console.log('[PAYMENT] Updated existing booking:', savedBooking._id);
+            console.log('[PAYMENT] Updated existing booking:', savedBooking._id);
 
-          // Update slot counts for existing booking (now that payment is confirmed)
-          try {
-            const { TimeSlotService } = require('../services/timeSlot.service');
-            const totalGuests = (existingBooking.adults || 0) + (existingBooking.children || 0);
-            
-            // Convert booking date to YYYY-MM-DD Malaysia timezone for timeslot lookup
-            let dateStr = existingBooking.date;
-            if (existingBooking.date instanceof Date) {
-              dateStr = existingBooking.date.toISOString().split('T')[0];
-            } else if (typeof existingBooking.date === 'string' && existingBooking.date.includes('T')) {
-              dateStr = existingBooking.date.split('T')[0];
-            } else if (typeof existingBooking.date === 'string') {
-              const bookingDate = new Date(existingBooking.date);
-              dateStr = bookingDate.toISOString().split('T')[0];
+            // Update slot counts for existing booking (now that payment is confirmed)
+            try {
+              const { TimeSlotService } = require('../services/timeSlot.service');
+              const totalGuests = (existingBooking.adults || 0) + (existingBooking.children || 0);
+              
+              // Convert booking date to YYYY-MM-DD Malaysia timezone for timeslot lookup
+              let dateStr = existingBooking.date;
+              if (existingBooking.date instanceof Date) {
+                dateStr = existingBooking.date.toISOString().split('T')[0];
+              } else if (typeof existingBooking.date === 'string' && existingBooking.date.includes('T')) {
+                dateStr = existingBooking.date.split('T')[0];
+              } else if (typeof existingBooking.date === 'string') {
+                const bookingDate = new Date(existingBooking.date);
+                dateStr = bookingDate.toISOString().split('T')[0];
+              }
+              dateStr = TimeSlotService.formatDateToMalaysiaTimezone(dateStr);
+              
+              console.log(`[PAYMENT] Converting booking date: ${existingBooking.date} → ${dateStr}`);
+              
+              await TimeSlotService.updateSlotBooking(
+                existingBooking.packageType,
+                existingBooking.packageId,
+                dateStr,
+                existingBooking.time,
+                totalGuests,
+                'add'
+              );
+              console.log('[PAYMENT] ✅ Updated slot for single booking:', savedBooking._id);
+            } catch (slotError) {
+              console.error('[PAYMENT] ❌ Failed to update slot for single booking:', slotError);
             }
-            dateStr = TimeSlotService.formatDateToMalaysiaTimezone(dateStr);
-            
-            console.log(`[PAYMENT] Converting booking date: ${existingBooking.date} → ${dateStr}`);
-            
-            await TimeSlotService.updateSlotBooking(
-              existingBooking.packageType,
-              existingBooking.packageId,
-              dateStr,
-              existingBooking.time,
-              totalGuests,
-              'add'
-            );
-            console.log('[PAYMENT] ✅ Updated slot for single booking:', savedBooking._id);
-          } catch (slotError) {
-            console.error('[PAYMENT] ❌ Failed to update slot for single booking:', slotError);
           }
 
           bookingResult = {
             success: true,
-            data: savedBooking,
-            bookingIds: [savedBooking._id]
+            data: existingBooking,
+            bookingIds: [existingBooking._id]
           };
         } else {
           // No existing booking found, create new one
@@ -534,19 +578,25 @@ export class PaymentController {
         // Send single booking confirmation email after payment success
         if (bookingResult.success && bookingData?.contactInfo?.email) {
           try {
-            // Get package details for email
-            let packageDetails: any = null;
-            if (bookingData.packageType === 'tour') {
-              const mongoose = require('mongoose');
-              const TourModel = mongoose.model('Tour');
-              packageDetails = await TourModel.findById(bookingData.packageId);
-            } else if (bookingData.packageType === 'transfer') {
-              const mongoose = require('mongoose');
-              const TransferModel = mongoose.model('Transfer');
-              packageDetails = await TransferModel.findById(bookingData.packageId);
-            }
+            // Check if confirmation email has already been sent
+            if (bookingResult.data.confirmationEmailSent) {
+              console.log('[PAYMENT] ✅ Confirmation email already sent for booking:', bookingResult.data._id);
+            } else {
+              console.log('[PAYMENT] Preparing to send single booking confirmation email...');
+              
+              // Get package details for email
+              let packageDetails: any = null;
+              if (bookingData.packageType === 'tour') {
+                const mongoose = require('mongoose');
+                const TourModel = mongoose.model('Tour');
+                packageDetails = await TourModel.findById(bookingData.packageId);
+              } else if (bookingData.packageType === 'transfer') {
+                const mongoose = require('mongoose');
+                const TransferModel = mongoose.model('Transfer');
+                packageDetails = await TransferModel.findById(bookingData.packageId);
+              }
 
-            const emailData: any = {
+              const emailData: any = {
               customerName: bookingData.contactInfo.name,
               customerEmail: bookingData.contactInfo.email,
               bookingId: bookingResult.data._id.toString(),
@@ -599,8 +649,21 @@ export class PaymentController {
             
             if (emailSent) {
               console.log('[PAYMENT] ✅ Single booking confirmation email sent successfully');
+              
+              // Mark booking as having confirmation email sent
+              await Booking.findByIdAndUpdate(
+                bookingResult.data._id,
+                { 
+                  $set: { 
+                    confirmationEmailSent: true,
+                    confirmationEmailSentAt: new Date()
+                  }
+                }
+              );
+              console.log('[PAYMENT] ✅ Marked booking as confirmation email sent');
             } else {
               console.error('[PAYMENT] ⚠️ Single booking confirmation email failed to send');
+            }
             }
           } catch (emailError) {
             console.error('[PAYMENT] ❌ Failed to send single booking confirmation email:', emailError);
