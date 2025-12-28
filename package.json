@@ -23,7 +23,6 @@
         "@types/mongoose": "^5.11.96",
         "@types/morgan": "^1.9.10",
         "@types/multer": "^2.0.0",
-        "@types/node": "^20.14.0",
         "@types/node-cron": "^3.0.11",
         "@types/nodemailer": "^6.4.17",
         "axios": "^1.11.0",
