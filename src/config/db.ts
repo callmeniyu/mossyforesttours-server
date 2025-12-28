@@ -5,16 +5,22 @@ const connectDB = async () => {
     try {
         const options: mongoose.ConnectOptions = {
             maxPoolSize: 10, // Maintain up to 10 socket connections
-            serverSelectionTimeoutMS: 30000, // Keep trying to send operations for 30 seconds
-            socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+            serverSelectionTimeoutMS: 60000, // Keep trying to send operations for 60 seconds (important for serverless)
+            socketTimeoutMS: 75000, // Close sockets after 75 seconds of inactivity
             family: 4, // Use IPv4, skip trying IPv6
-            connectTimeoutMS: 30000, // Give up initial connection after 30 seconds
+            connectTimeoutMS: 60000, // Give up initial connection after 60 seconds (important for serverless cold starts)
             retryWrites: true,
             retryReads: true,
             bufferCommands: false, // Disable mongoose buffering
+            dbName: 'cameronhighlandstours', // Explicitly specify database name
         }
 
-        await mongoose.connect(env.MONGO_URI, options)
+        // Add database name to URI if not present
+        const connectionUri = env.MONGO_URI.includes('/?') 
+            ? env.MONGO_URI.replace('/?', '/cameronhighlandstours?')
+            : env.MONGO_URI + '/cameronhighlandstours'
+
+        await mongoose.connect(connectionUri, options)
         console.log("MongoDB Connected with optimized settings")
     } catch (error) {
         console.error("MongoDB Connection Error:", error)
