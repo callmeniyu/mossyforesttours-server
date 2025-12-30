@@ -9,7 +9,7 @@ export interface ItineraryItem {
 export interface TourDetails {
     about: string
     longDescription?: string
-    itinerary: ItineraryItem[]
+    itinerary: string  // Changed from ItineraryItem[] to string
     pickupLocations: string[]
     pickupGuidelines?: string
     notes: string[]
@@ -76,10 +76,7 @@ const TourSchema = new Schema<TourType>(
         details: {
             about: String,
             longDescription: String,
-            itinerary: [{
-                time: String,
-                activity: String
-            }],
+            itinerary: String,  // Changed from array to string
             pickupLocations: [String],
             pickupGuidelines: String,
             notes: [String],
