@@ -631,7 +631,6 @@ export class BrevoEmailService {
                 <p>Your trusted travel partner</p>
                 <div style="margin: 15px 0;">
                     <a href="mailto:${emailConfig.templates.supportEmail}">Email</a> |
-                    <a href="http://wa.me/60196592141">Call</a> |
                     <a href="${emailConfig.templates.website}">Website</a>
                 </div>
                 <p style="font-size: 12px; color: #bbb; margin-top: 20px;">

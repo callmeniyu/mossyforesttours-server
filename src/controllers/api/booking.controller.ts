@@ -192,9 +192,12 @@ export async function createBooking(req: Request, res: Response) {
         (emailData as any).vehicleSeatCapacity = packageDetails.seatCapacity;
       }
 
-      // Add pickup guidelines from package details
+      // Add pickup guidelines from package details (handle both new and legacy field names)
       if (packageDetails?.details?.pickupGuidelines) {
         (emailData as any).pickupGuidelines = packageDetails.details.pickupGuidelines;
+      } else if (packageType === 'transfer' && (packageDetails?.details as any)?.pickupDescription) {
+        // Fallback for legacy transfers that use pickupDescription
+        (emailData as any).pickupGuidelines = (packageDetails.details as any).pickupDescription;
       }
 
       await EmailService.sendBookingConfirmation(emailData);

@@ -367,22 +367,32 @@ export class PaymentController {
             } else {
               console.log(`[PAYMENT] Sending confirmation email for ${bookingsNeedingEmail.length} cart bookings...`);
               
-              // Fetch package details for proper package names in email
+              // Fetch package details for proper package names and pickup guidelines in email
               const bookingsWithPackageNames = await Promise.all(
                 bookingResult.data.map(async (booking: any) => {
                 let packageName = booking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service';
+                let pickupGuidelines: string | undefined = undefined;
+                let packageDetails: any = null;
                 
                 try {
                   if (booking.packageType === 'tour') {
                     const mongoose = require('mongoose');
                     const TourModel = mongoose.model('Tour');
-                    const packageDetails = await TourModel.findById(booking.packageId);
+                    packageDetails = await TourModel.findById(booking.packageId);
                     packageName = packageDetails?.title || packageName;
                   } else if (booking.packageType === 'transfer') {
                     const mongoose = require('mongoose');
                     const TransferModel = mongoose.model('Transfer');
-                    const packageDetails = await TransferModel.findById(booking.packageId);
+                    packageDetails = await TransferModel.findById(booking.packageId);
                     packageName = packageDetails?.title || packageName;
+                  }
+                  
+                  // Extract pickup guidelines from package details
+                  if (packageDetails?.details?.pickupGuidelines) {
+                    pickupGuidelines = packageDetails.details.pickupGuidelines;
+                  } else if (booking.packageType === 'transfer' && (packageDetails?.details as any)?.pickupDescription) {
+                    // Fallback for legacy transfers that use pickupDescription
+                    pickupGuidelines = (packageDetails.details as any).pickupDescription;
                   }
                 } catch (packageError) {
                   console.warn(`[PAYMENT] Could not fetch package details for ${booking.packageId}:`, packageError);
@@ -398,6 +408,7 @@ export class PaymentController {
                   adults: booking.adults,
                   children: booking.children || 0,
                   pickupLocation: booking.pickupLocation,
+                  pickupGuidelines,
                   total: booking.total,
                   currency: booking.paymentInfo?.currency || 'MYR'
                 };
@@ -629,6 +640,14 @@ export class PaymentController {
               emailData.isVehicleBooking = true;
               emailData.vehicleName = packageDetails.vehicle;
               emailData.vehicleSeatCapacity = packageDetails.seatCapacity;
+            }
+
+            // Add pickup guidelines from package details (handle both new and legacy field names)
+            if (packageDetails?.details?.pickupGuidelines) {
+              emailData.pickupGuidelines = packageDetails.details.pickupGuidelines;
+            } else if (bookingData.packageType === 'transfer' && (packageDetails?.details as any)?.pickupDescription) {
+              // Fallback for legacy transfers that use pickupDescription
+              emailData.pickupGuidelines = (packageDetails.details as any).pickupDescription;
             }
 
             console.log('[PAYMENT] Sending single booking confirmation email...');
