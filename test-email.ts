@@ -19,7 +19,7 @@ import { BookingEmailData } from './src/services/email.service';
 // CONFIGURATION - CHANGE THIS TO YOUR EMAIL
 // ============================================
 const TEST_EMAIL = '786niyasniya@gmail.com'; // Change this to your email address
-const ADMIN_EMAIL = 'cameronhighlandstours.com@gmail.com'; // Admin notification email
+const ADMIN_EMAIL = 'mossyforesttours@gmail.com'; // Admin notification email
 const TEST_BOOKING_TYPE: 'tour' | 'transfer' = 'tour'; // Change to 'transfer' to test transfer email
 
 // ============================================

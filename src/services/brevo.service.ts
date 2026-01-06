@@ -508,7 +508,7 @@ export class BrevoEmailService {
         <div class="container">
             <div class="header">
                 <div class="header-content">
-                    <div class="text-logo">Cameron Highlands Tours</div>
+                    <div class="text-logo">Mossy Forest Tours</div>
                     <h1>✅ Booking Confirmed!</h1>
                     <p>Your adventure awaits</p>
                 </div>
@@ -765,7 +765,7 @@ export class BrevoEmailService {
     <body>
         <div class="container">
             <div class="header">
-                <div class="text-logo">Cameron Highlands Tours</div>
+                <div class="text-logo">Mossy Forest Tours</div>
                 <h1 style="font-size: 28px; font-weight: 600; margin-bottom: 10px;">✅ Multiple Bookings Confirmed!</h1>
                 <p style="font-size: 16px; opacity: 0.95;">Your adventures await</p>
             </div>
@@ -868,7 +868,7 @@ export class BrevoEmailService {
     return `
         <div class="container">
             <div class="header">
-                <div style="font-size: 32px; font-weight: 500; margin-bottom: 20px;">Cameron Highlands Tours</div>
+                <div style="font-size: 32px; font-weight: 500; margin-bottom: 20px;">Mossy Forest Tours</div>
                 <h1 style="font-size: 28px; margin-bottom: 10px;">🌟 How was your experience?</h1>
                 <p>We'd love to hear from you!</p>
             </div>

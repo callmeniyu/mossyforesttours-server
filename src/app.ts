@@ -60,7 +60,7 @@ app.get("/health", (req, res) => {
     if (dbStatus === 1) {
         res.json({
             status: 'ok',
-            message: 'Cameron Highlands Tours API is running',
+            message: 'Mossy Forest Tours API is running',
             database: 'connected',
             timestamp: new Date().toISOString()
         });

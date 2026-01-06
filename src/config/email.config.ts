@@ -12,14 +12,14 @@ export const emailConfig = {
     }
   },
   from: {
-    name: process.env.FROM_NAME || 'Cameron Highlands Tours',
+    name: process.env.FROM_NAME || 'Mossy Forest Tours',
     email: process.env.FROM_EMAIL || process.env.SMTP_USER || 'noreply@cameronhighlandstours.com',
   },
   templates: {
-    logo: process.env.COMPANY_LOGO || 'https://cameronhighlandstours.com/logo.png',
-    website: process.env.COMPANY_WEBSITE || 'https://cameronhighlandstours.com',
-    supportEmail: process.env.SUPPORT_EMAIL || 'support@cameronhighlandstours.com',
+    logo: process.env.COMPANY_LOGO || 'https://mossyforesttours.my/logo.png',
+    website: process.env.COMPANY_WEBSITE || 'https://mossyforesttours.my',
+    supportEmail: process.env.SUPPORT_EMAIL || 'support@mossyforesttours.my',
     supportPhone: process.env.SUPPORT_PHONE || '+60 19-659 2141',
-    notificationEmail: process.env.NOTIFICATION_EMAIL || 'cameronhighlandstours@gmail.com', // Admin notification email
+    notificationEmail: process.env.NOTIFICATION_EMAIL || 'mossyforesttours@gmail.com', // Admin notification email
   }
 };
