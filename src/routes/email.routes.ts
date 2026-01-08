@@ -246,7 +246,7 @@ router.get('/status', (req, res) => {
 /**
  * Test endpoint to send booking notification to admin
  * POST /api/email/test-admin-notification
- * Body: {} (no body required - sends to oastel.com@gmail.com)
+ * Body: {} (no body required - sends to mossyforesttours@gmail.com)
  */
 router.post('/test-admin-notification', async (req, res) => {
   try {
@@ -326,7 +326,7 @@ router.post('/test-admin-notification', async (req, res) => {
     if (singleSuccess && cartSuccess) {
       res.json({
         success: true,
-        message: `Admin notification test emails sent successfully to ${process.env.NOTIFICATION_EMAIL || 'oastel.com@gmail.com'}`,
+        message: `Admin notification test emails sent successfully to ${process.env.NOTIFICATION_EMAIL || 'mossyforesttours@gmail.com'}`,
         tests: {
           singleBooking: singleSuccess,
           cartBooking: cartSuccess,
@@ -383,7 +383,7 @@ router.post('/feedback', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Message must be at least 100 characters long' });
     }
 
-    const toEmail = process.env.FEEDBACK_TO_EMAIL || 'oastel.com@gmail.com';
+    const toEmail = process.env.FEEDBACK_TO_EMAIL || 'mossyforesttours@gmail.com';
 
     // Prefer Brevo if configured
     let sent = false;
