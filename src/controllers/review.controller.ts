@@ -122,6 +122,7 @@ export async function getReviews(req: Request, res: Response) {
       packageId: new Types.ObjectId(packageId),
       packageType,
     })
+      .populate('userId', 'name image')
       .sort({ createdAt: -1 })
       .lean();
 
