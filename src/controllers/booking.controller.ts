@@ -177,17 +177,19 @@ class BookingController {
       // Handle date filtering
       if (req.query.date) {
         const dateStr = req.query.date as string;
-        // Parse date using Malaysia timezone to match how dates are stored
-        const startDate = /^\d{4}-\d{2}-\d{2}$/.test(dateStr)
-          ? parseDateAsMalaysiaTimezone(dateStr)
-          : new Date(dateStr);
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 1);
+        // CRITICAL: Query from midnight Malaysia time (4 PM previous day UTC) to cover all bookings on the date
+        // Bookings may be stored at various UTC times throughout the Malaysian date
+        const [year, month, day] = dateStr.split('-').map(Number);
+        // Start at 4 PM UTC previous day (midnight Malaysia time = UTC+8)
+        const startDate = new Date(Date.UTC(year, month - 1, day - 1, 16, 0, 0));
+        // End at 4 PM UTC same day (midnight next day Malaysia time)
+        const endDate = new Date(Date.UTC(year, month - 1, day, 16, 0, 0));
+        
         filter.date = {
           $gte: startDate,
           $lt: endDate,
         };
-        console.log(`[BOOKING QUERY] Single date filter: ${dateStr} -> ${startDate.toISOString()} to ${endDate.toISOString()}`);
+        console.log(`[BOOKING QUERY] Single date filter: ${dateStr} (Malaysia) -> ${startDate.toISOString()} to ${endDate.toISOString()}`);
       }
 
       // Handle beforeDate filtering (for booking history)
