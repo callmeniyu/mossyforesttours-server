@@ -187,6 +187,7 @@ class BookingController {
           $gte: startDate,
           $lt: endDate,
         };
+        console.log(`[BOOKING QUERY] Single date filter: ${dateStr} -> ${startDate.toISOString()} to ${endDate.toISOString()}`);
       }
 
       // Handle beforeDate filtering (for booking history)
@@ -198,6 +199,7 @@ class BookingController {
         filter.date = {
           $lt: beforeDate,
         };
+        console.log(`[BOOKING QUERY] Before date filter: ${beforeDateStr} -> ${beforeDate.toISOString()}`);
       }
 
       // Handle date range filtering (for calendar view optimization)
@@ -216,9 +218,11 @@ class BookingController {
           $gte: startDate,
           $lt: endDate,
         };
+        console.log(`[BOOKING QUERY] Date range filter: ${startDateStr} to ${endDateStr} -> ${startDate.toISOString()} to ${endDate.toISOString()}`);
       }
 
       const bookings = await BookingService.getBookings(filter);
+      console.log(`[BOOKING QUERY] Found ${bookings.length} bookings with filter:`, JSON.stringify(filter.date || 'no date filter'));
       res.json({
         success: true,
         bookings: bookings
