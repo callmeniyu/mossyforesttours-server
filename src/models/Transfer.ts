@@ -25,7 +25,8 @@ export interface TransferType extends Document {
     status: "active" | "sold"
     bookedCount: number
     rating?: number  // Average rating out of 5
-    reviewCount?: number  // Number of reviews
+    reviewCount?: number  // Number of actual user reviews
+    adminReviewCount?: number  // Admin's predefined review count for display
     oldPrice: number
     newPrice: number
     childPrice: number
@@ -58,6 +59,7 @@ const TransferSchema = new Schema<TransferType>(
         bookedCount: { type: Number, default: 0 },
         rating: { type: Number, default: 0 },
         reviewCount: { type: Number, default: 0 },
+        adminReviewCount: { type: Number, default: 0 },
         oldPrice: Number,
         newPrice: Number,
         childPrice: Number,

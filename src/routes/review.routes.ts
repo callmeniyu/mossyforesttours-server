@@ -7,11 +7,13 @@ import {
   getAllReviews,
   getPackagesWithReviews,
 } from "../controllers/review.controller";
+import { uploadReviewImages } from "../middleware/upload";
 
 const router = Router();
 
 // Create a new review (requires authentication on client-side)
-router.post("/", createReview);
+// Supports optional image uploads (max 3 images)
+router.post("/", uploadReviewImages, createReview);
 
 // Get packages with reviews (admin)
 router.get("/admin/packages", getPackagesWithReviews);

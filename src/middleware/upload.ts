@@ -77,6 +77,28 @@ const transferStorage = new CloudinaryStorage({
     } as any,
 })
 
+// Configure Cloudinary storage for review images
+const reviewStorage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: "oastel/reviews", // Folder in Cloudinary
+        allowed_formats: ["jpg", "jpeg", "png", "webp"],
+        transformation: [
+            {
+                width: 800,
+                height: 600,
+                crop: "limit",
+                quality: "auto:good",
+            },
+        ],
+        public_id: (req: any, file: any) => {
+            // Generate unique public ID
+            const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9)
+            return `review-${uniqueSuffix}`
+        },
+    } as any,
+})
+
 // File filter for images only
 const fileFilter = (req: any, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
     if (file.mimetype.startsWith("image/")) {
@@ -113,6 +135,15 @@ const transferUpload = multer({
     },
 })
 
+// Configure multer with Cloudinary storage for reviews (supports up to 3 images)
+const reviewUpload = multer({
+    storage: reviewStorage,
+    fileFilter,
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit per file
+    },
+})
+
 // No need for image processing middleware - Cloudinary handles it
 export const processImage = async (req: Request, res: Response, next: NextFunction) => {
     // Cloudinary automatically processes images, so we just continue
@@ -135,6 +166,8 @@ export const deleteOldImage = async (imagePath: string) => {
                 publicId = `oastel/blogs/${filename.split(".")[0]}`
             } else if (imagePath.includes("/transfers/")) {
                 publicId = `oastel/transfers/${filename.split(".")[0]}`
+            } else if (imagePath.includes("/reviews/")) {
+                publicId = `oastel/reviews/${filename.split(".")[0]}`
             }
 
             if (publicId) {
@@ -150,3 +183,4 @@ export const deleteOldImage = async (imagePath: string) => {
 export const uploadTourImage = tourUpload.single("image")
 export const uploadBlogImage = blogUpload.single("image")
 export const uploadTransferImage = transferUpload.single("image")
+export const uploadReviewImages = reviewUpload.array("images", 3) // Max 3 images

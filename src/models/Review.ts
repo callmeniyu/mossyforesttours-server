@@ -8,6 +8,7 @@ export interface ReviewType extends Document {
   userEmail: string;
   rating: number; // 1-5 stars
   comment: string;
+  images?: string[]; // Optional array of image URLs (max 3)
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +49,16 @@ const ReviewSchema = new Schema<ReviewType>(
       type: String,
       required: true,
       maxlength: 1000,
+    },
+    images: {
+      type: [String],
+      default: [],
+      validate: {
+        validator: function(v: string[]) {
+          return v.length <= 3; // Max 3 images
+        },
+        message: 'A review can have a maximum of 3 images'
+      }
     },
   },
   { timestamps: true }

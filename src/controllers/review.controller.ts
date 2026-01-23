@@ -65,6 +65,23 @@ export async function createReview(req: Request, res: Response) {
       });
     }
 
+    // Handle image uploads from multer
+    const images: string[] = [];
+    if (req.files && Array.isArray(req.files)) {
+      // Multer stores uploaded files in req.files
+      for (const file of req.files) {
+        images.push((file as any).path); // Cloudinary URL is in file.path
+      }
+    }
+
+    // Validate max 3 images
+    if (images.length > 3) {
+      return res.status(400).json({
+        success: false,
+        message: "Maximum 3 images allowed per review",
+      });
+    }
+
     // Create the review
     const review = new Review({
       packageId: new Types.ObjectId(packageId),
@@ -74,6 +91,7 @@ export async function createReview(req: Request, res: Response) {
       userEmail,
       rating,
       comment,
+      images: images.length > 0 ? images : undefined, // Only include if images exist
     });
 
     await review.save();
@@ -350,15 +368,22 @@ async function updatePackageRating(packageId: string, packageType: string) {
 
     const roundedRating = Math.round(averageRating * 10) / 10;
 
+    // Update only the rating, do NOT update reviewCount or adminReviewCount
+    // Frontend fetches actual reviews dynamically and adds to admin's predefined count
+    // reviewCount = admin's predefined value (set in admin panel)
+    // adminReviewCount = new field for admin's predefined value (migration target)
+    // Both should be preserved and never overwritten by this function
     if (packageType === "tour") {
       await Tour.findByIdAndUpdate(packageId, {
         rating: roundedRating,
-        reviewCount: totalReviews,
+        // Do NOT update reviewCount - it contains admin's predefined value
+        // Do NOT update adminReviewCount - it's set by admin only
       });
     } else {
       await Transfer.findByIdAndUpdate(packageId, {
         rating: roundedRating,
-        reviewCount: totalReviews,
+        // Do NOT update reviewCount - it contains admin's predefined value
+        // Do NOT update adminReviewCount - it's set by admin only
       });
     }
   } catch (error) {
