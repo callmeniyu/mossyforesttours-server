@@ -263,6 +263,8 @@ class BookingService {
         // NOTE: Email sending is handled by the confirmPayment endpoint, not here
         // This avoids duplicate emails and ensures emails are sent even if webhook fires first
         console.log(`📧 Email will be sent by confirmPayment endpoint for booking ${booking._id}`);
+      } else {
+        console.log(`⚠️ No booking found to update for payment intent: ${opts.paymentIntentId}`);
       }
 
       return booking;

@@ -11,6 +11,7 @@ import './Blog';
 import './BlackoutDate';
 import './Vehicle';
 import './WebhookEvent';
+import './FailedWebhookEvent';
 
 console.log('✅ All models registered with Mongoose');
 

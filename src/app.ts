@@ -20,6 +20,7 @@ import paymentRoutes from "./routes/payment.routes"
 import paymentDebugRoutes from "./routes/paymentDebug.routes"
 import reviewRoutes from "./routes/review.routes"
 import currencyRoutes from "./routes/currency.routes"
+import failedWebhookRoutes from "./routes/failedWebhook.routes"
 import { PaymentCleanupService } from "./services/paymentCleanup.service"
 
 const app = express()
@@ -95,6 +96,8 @@ app.use("/api/payment-debug", paymentDebugRoutes)
 app.use("/api/reviews", reviewRoutes)
 // Currency exchange rates
 app.use("/api/currency", currencyRoutes)
+// Failed webhook management (admin only)
+app.use("/api/admin", failedWebhookRoutes)
 
 // Automatic payment cleanup disabled - can be triggered manually via API if needed
 // Manual cleanup endpoint: POST /api/payment/cleanup-abandoned

@@ -2,9 +2,131 @@ import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import BookingService from '../services/booking.service';
 import WebhookEvent from '../models/WebhookEvent';
+import FailedWebhookEvent from '../models/FailedWebhookEvent';
+import mongoose from 'mongoose';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', { apiVersion: '2025-08-27.basil' });
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+// Helper function to create booking from payment intent metadata
+async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Promise<any> {
+  try {
+    const metadata = intent.metadata;
+    
+    // Validate required metadata
+    if (!metadata.packageType || !metadata.packageId || !metadata.date || !metadata.time || !metadata.customerEmail || !metadata.customerName) {
+      console.error('❌ Missing required metadata to create booking:', metadata);
+      return null;
+    }
+
+    console.log('📝 Creating booking from payment intent metadata:', {
+      packageType: metadata.packageType,
+      packageId: metadata.packageId,
+      customerEmail: metadata.customerEmail,
+      date: metadata.date,
+      time: metadata.time
+    });
+
+    // Parse booking data from metadata
+    const adults = parseInt(metadata.adults || '1', 10);
+    const children = parseInt(metadata.children || '0', 10);
+    const amount = intent.amount / 100; // Convert from cents
+    const currency = intent.currency.toUpperCase();
+    
+    // Calculate bank charge (2.8% for Stripe)
+    const bankCharge = Math.round(amount * 0.028 * 100) / 100;
+    
+    // Prepare booking data
+    const bookingData = {
+      packageType: metadata.packageType as 'tour' | 'transfer',
+      packageId: new mongoose.Types.ObjectId(metadata.packageId),
+      date: new Date(metadata.date),
+      time: metadata.time,
+      adults,
+      children,
+      pickupLocation: metadata.pickupLocation || 'To be confirmed',
+      contactInfo: {
+        name: metadata.customerName,
+        email: metadata.customerEmail,
+        phone: metadata.phone || '',
+        whatsapp: metadata.whatsapp || ''
+      },
+      subtotal: amount,
+      total: amount,
+      paymentInfo: {
+        amount,
+        bankCharge,
+        currency,
+        paymentStatus: 'succeeded',
+        stripePaymentIntentId: intent.id,
+        paymentMethod: 'stripe'
+      },
+      isVehicleBooking: metadata.bookingType === 'single' && metadata.packageType === 'transfer',
+      vehicleSeatCapacity: metadata.vehicleSeatCapacity ? parseInt(metadata.vehicleSeatCapacity, 10) : undefined
+    };
+
+    // Create booking using the service
+    const booking = await BookingService.createBookingDirect(bookingData);
+    
+    console.log('✅ Booking created from webhook:', booking._id);
+    
+    // Send confirmation email
+    try {
+      const { EmailService } = require('../services/email.service');
+      const emailService = new EmailService();
+      
+      // Fetch package details for email
+      let packageDetails: any = null;
+      if (bookingData.packageType === 'tour') {
+        const TourModel = mongoose.model('Tour');
+        packageDetails = await TourModel.findById(bookingData.packageId);
+      } else if (bookingData.packageType === 'transfer') {
+        const TransferModel = mongoose.model('Transfer');
+        packageDetails = await TransferModel.findById(bookingData.packageId);
+      }
+      
+      const emailData = {
+        customerName: bookingData.contactInfo.name,
+        customerEmail: bookingData.contactInfo.email,
+        bookingId: booking._id.toString(),
+        packageName: packageDetails?.title || `${bookingData.packageType} Package`,
+        packageType: bookingData.packageType,
+        date: bookingData.date,
+        time: bookingData.time,
+        adults: bookingData.adults,
+        children: bookingData.children,
+        pickupLocation: bookingData.pickupLocation,
+        pickupGuidelines: packageDetails?.details?.pickupGuidelines || packageDetails?.details?.pickupDescription,
+        total: bookingData.total,
+        currency: bookingData.paymentInfo.currency
+      };
+      
+      const emailSent = await emailService.sendBookingConfirmation(emailData);
+      
+      if (emailSent) {
+        console.log('✅ Confirmation email sent for webhook-created booking');
+        // Mark email as sent
+        const BookingModel = require('../models/Booking').default;
+        await BookingModel.findByIdAndUpdate(booking._id, {
+          $set: {
+            confirmationEmailSent: true,
+            confirmationEmailSentAt: new Date()
+          }
+        });
+      } else {
+        console.error('⚠️ Failed to send confirmation email for webhook-created booking');
+      }
+    } catch (emailError) {
+      console.error('❌ Error sending confirmation email from webhook:', emailError);
+      // Don't fail the booking creation if email fails
+    }
+    
+    return booking;
+  } catch (error) {
+    console.error('❌ Error creating booking from payment intent:', error);
+    throw error;
+  }
+}
 
 // Stripe requires the raw body to verify signature. Ensure rawBody is available in express middleware.
 export async function stripeWebhook(req: Request, res: Response) {
@@ -45,7 +167,49 @@ export async function stripeWebhook(req: Request, res: Response) {
         const intent = event.data.object as Stripe.PaymentIntent;
         const bookingId = intent.metadata?.bookingId;
         const amount = intent.amount ? (intent.amount / 100) : undefined;
-        await BookingService.handleStripeSuccess({ bookingId, paymentIntentId: intent.id, amount, currency: intent.currency });
+        
+        // Try to update existing booking first
+        const updatedBooking = await BookingService.handleStripeSuccess({ bookingId, paymentIntentId: intent.id, amount, currency: intent.currency });
+        
+        // If no booking was found/updated, create one from payment intent metadata
+        if (!updatedBooking && intent.metadata.bookingType === 'single') {
+          console.log('⚠️ No existing booking found for payment intent, creating from metadata...');
+          try {
+            await createBookingFromPaymentIntent(intent);
+            console.log('✅ Successfully created booking from payment intent metadata');
+          } catch (createError: any) {
+            console.error('❌ Failed to create booking from payment intent:', createError);
+            
+            // Log to admin/monitoring system
+            console.error('🚨 CRITICAL: Payment succeeded but booking creation failed!', {
+              paymentIntentId: intent.id,
+              customerEmail: intent.metadata.customerEmail,
+              amount: intent.amount / 100,
+              currency: intent.currency,
+              metadata: intent.metadata
+            });
+            
+            // Store failed webhook event for admin review
+            try {
+              await (FailedWebhookEvent as any).create({
+                eventId: event.id,
+                eventType: event.type,
+                source: 'stripe',
+                paymentIntentId: intent.id,
+                customerEmail: intent.metadata.customerEmail,
+                amount: intent.amount / 100,
+                currency: intent.currency,
+                metadata: intent.metadata,
+                errorMessage: createError.message || 'Unknown error',
+                errorStack: createError.stack,
+                resolved: false
+              });
+              console.log('📝 Failed webhook event logged for admin review');
+            } catch (logError) {
+              console.error('❌ Failed to log failed webhook event:', logError);
+            }
+          }
+        }
         break;
       }
       case 'payment_intent.payment_failed': {
