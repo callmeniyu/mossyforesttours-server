@@ -30,6 +30,17 @@ async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Pro
     // Parse booking data from metadata
     const adults = parseInt(metadata.adults || '1', 10);
     const children = parseInt(metadata.children || '0', 10);
+    
+    // Validate parsed numbers
+    if (isNaN(adults) || adults < 1 || adults > 50) {
+      console.error('❌ Invalid adults value:', metadata.adults);
+      return null;
+    }
+    if (isNaN(children) || children < 0 || children > 20) {
+      console.error('❌ Invalid children value:', metadata.children);
+      return null;
+    }
+    
     const amount = intent.amount / 100; // Convert from cents
     const currency = intent.currency.toUpperCase();
     
@@ -46,10 +57,10 @@ async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Pro
       children,
       pickupLocation: metadata.pickupLocation || 'To be confirmed',
       contactInfo: {
-        name: metadata.customerName,
+        name: (metadata.customerName || '').substring(0, 100),
         email: metadata.customerEmail,
-        phone: metadata.phone || '',
-        whatsapp: metadata.whatsapp || ''
+        phone: (metadata.phone || '').substring(0, 20),
+        whatsapp: (metadata.whatsapp || '').substring(0, 20)
       },
       subtotal: amount,
       total: amount,
@@ -62,7 +73,10 @@ async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Pro
         paymentMethod: 'stripe'
       },
       isVehicleBooking: metadata.bookingType === 'single' && metadata.packageType === 'transfer',
-      vehicleSeatCapacity: metadata.vehicleSeatCapacity ? parseInt(metadata.vehicleSeatCapacity, 10) : undefined
+      vehicleSeatCapacity: metadata.vehicleSeatCapacity ? (() => {
+        const capacity = parseInt(metadata.vehicleSeatCapacity, 10);
+        return (!isNaN(capacity) && capacity > 0 && capacity <= 50) ? capacity : undefined;
+      })() : undefined
     };
 
     // Create booking using the service
@@ -144,14 +158,15 @@ export async function stripeWebhook(req: Request, res: Response) {
   }
 
   try {
-    // Dedupe: skip processing if event id already seen
+    // Dedupe: save event first to ensure idempotency even if processing fails
     const existing = await (WebhookEvent as any).findOne({ eventId: event.id });
     if (existing) {
       console.log(`🔁 Skipping already processed event ${event.id}`);
       return res.json({ received: true });
     }
 
-    await (WebhookEvent as any).create({ eventId: event.id, source: 'stripe' });
+    // Create webhook event record BEFORE processing
+    await (WebhookEvent as any).create({ eventId: event.id, source: 'stripe', receivedAt: new Date() });
 
     switch (event.type) {
       case 'checkout.session.completed': {

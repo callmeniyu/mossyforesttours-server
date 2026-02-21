@@ -68,82 +68,118 @@ export class EmailService {
   private static transporter = nodemailer.createTransport(emailConfig.smtp);
 
   /**
-   * Send booking confirmation email
+   * Send booking confirmation email using Brevo only
+   * Records email failures in database for admin follow-up
    */
   async sendBookingConfirmation(booking: BookingEmailData): Promise<boolean> {
     try {
-      // Try Brevo first (bypasses SMTP port blocking)
-      if (process.env.BREVO_API_KEY) {
-        console.log('📧 Using Brevo API for email delivery...');
-        const confirmationResult = await BrevoEmailService.sendBookingConfirmation(booking);
+      // ONLY use Brevo - SMTP doesn't work reliably
+      if (!process.env.BREVO_API_KEY) {
+        console.error('❌ CRITICAL: BREVO_API_KEY not configured! Cannot send emails.');
+        console.error('   Please configure BREVO_API_KEY in .env file');
         
-        // Also send notification to admin
+        // Log failure for admin review
+        await this.logEmailFailure(booking, 'BREVO_API_KEY not configured');
+        return false;
+      }
+
+      console.log('📧 Using Brevo API for email delivery...');
+      
+      // Send confirmation email with retry logic
+      let retryCount = 0;
+      const maxRetries = 3;
+      let lastError: any;
+      
+      while (retryCount < maxRetries) {
         try {
-          await BrevoEmailService.sendBookingNotification(booking);
-          console.log('📧 Admin notification sent for booking:', booking.bookingId);
-        } catch (notificationError) {
-          console.error('⚠️ Failed to send admin notification:', notificationError);
-          // Don't fail the main confirmation if notification fails
+          const confirmationResult = await BrevoEmailService.sendBookingConfirmation(booking);
+          
+          if (confirmationResult) {
+            console.log(`✅ Confirmation email sent to ${booking.customerEmail} for booking ${booking.bookingId}`);
+            
+            // Also send notification to admin (non-blocking)
+            this.sendAdminNotification(booking).catch(err => {
+              console.error('⚠️ Admin notification failed (non-critical):', err.message);
+            });
+            
+            return true;
+          } else {
+            lastError = new Error('Brevo returned false');
+            retryCount++;
+            if (retryCount < maxRetries) {
+              console.log(`⚠️ Email send failed, retry ${retryCount}/${maxRetries}...`);
+              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            }
+          }
+        } catch (error: any) {
+          lastError = error;
+          retryCount++;
+          if (retryCount < maxRetries) {
+            console.error(`❌ Email error (attempt ${retryCount}/${maxRetries}):`, error.message);
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+          }
         }
-        
-        return confirmationResult;
-      }
-
-      // Fallback to SMTP if Brevo is not configured
-      console.log('📧 Brevo not configured, falling back to SMTP...');
-      
-      // Validate required environment variables
-      if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.error('❌ Missing required email environment variables:');
-        console.error('SMTP_USER:', process.env.SMTP_USER ? '✓ Set' : '✗ Missing');
-        console.error('SMTP_PASS:', process.env.SMTP_PASS ? '✓ Set' : '✗ Missing');
-        throw new Error('Missing SMTP credentials in environment variables');
-      }
-
-      // Debug: Log configuration (without password)
-      console.log('📧 Email Configuration Check:');
-      console.log('SMTP Host:', emailConfig.smtp.host);
-      console.log('SMTP Port:', emailConfig.smtp.port);
-      console.log('SMTP Secure:', emailConfig.smtp.secure);
-      console.log('SMTP User:', emailConfig.smtp.auth.user);
-      console.log('SMTP Pass Length:', emailConfig.smtp.auth.pass ? emailConfig.smtp.auth.pass.length : 0);
-      console.log('From Email:', emailConfig.from.email);
-
-      // Test connection first
-      await EmailService.transporter.verify();
-      console.log('✅ SMTP connection verified successfully');
-
-      const html = this.generateBookingConfirmationHTML(booking);
-      
-      const mailOptions = {
-        from: `"${emailConfig.from.name}" <${emailConfig.from.email}>`,
-        to: booking.customerEmail,
-        subject: `🎉 Booking Confirmation - ${booking.packageName}`,
-        html,
-      };
-
-      await EmailService.transporter.sendMail(mailOptions);
-      console.log(`Confirmation email sent to ${booking.customerEmail}`);
-      
-      // Also send notification to admin via SMTP
-      try {
-        const adminMailOptions = {
-          from: `"${emailConfig.from.name}" <${emailConfig.from.email}>`,
-          to: emailConfig.templates.notificationEmail,
-          subject: `🔔 New Booking Received - ${booking.packageName} (${booking.packageType})`,
-          html: this.generateBookingNotificationHTML(booking),
-        };
-        await EmailService.transporter.sendMail(adminMailOptions);
-        console.log('📧 Admin notification sent via SMTP for booking:', booking.bookingId);
-      } catch (notificationError) {
-        console.error('⚠️ Failed to send admin notification via SMTP:', notificationError);
-        // Don't fail the main confirmation if notification fails
       }
       
-      return true;
-    } catch (error) {
-      console.error('Error sending confirmation email:', error);
+      // All retries failed
+      console.error(`❌ CRITICAL: Failed to send confirmation email after ${maxRetries} attempts`);
+      console.error('   Last error:', lastError?.message || 'Unknown error');
+      
+      // Log failure for admin review
+      await this.logEmailFailure(booking, lastError?.message || 'Failed after retries');
+      
       return false;
+    } catch (error: any) {
+      console.error('❌ Fatal error sending confirmation email:', error);
+      await this.logEmailFailure(booking, error.message || 'Fatal error');
+      return false;
+    }
+  }
+
+  /**
+   * Send admin notification (non-critical, don't fail booking if this fails)
+   */
+  private async sendAdminNotification(booking: BookingEmailData): Promise<void> {
+    try {
+      await BrevoEmailService.sendBookingNotification(booking);
+      console.log('📧 Admin notification sent for booking:', booking.bookingId);
+    } catch (error: any) {
+      console.error('⚠️ Failed to send admin notification:', error.message);
+      // Don't throw - this is non-critical
+    }
+  }
+
+  /**
+   * Log email failure to database for admin follow-up
+   */
+  private async logEmailFailure(booking: BookingEmailData, reason: string): Promise<void> {
+    try {
+      const mongoose = require('mongoose');
+      const FailedEmailLog = mongoose.model('FailedEmailLog', new mongoose.Schema({
+        bookingId: String,
+        customerEmail: String,
+        customerName: String,
+        packageName: String,
+        reason: String,
+        bookingData: Object,
+        resolved: { type: Boolean, default: false },
+        createdAt: { type: Date, default: Date.now }
+      }));
+      
+      await FailedEmailLog.create({
+        bookingId: booking.bookingId,
+        customerEmail: booking.customerEmail,
+        customerName: booking.customerName,
+        packageName: booking.packageName,
+        reason,
+        bookingData: booking,
+        resolved: false
+      });
+      
+      console.log('📝 Email failure logged for admin review');
+    } catch (logError: any) {
+      console.error('❌ Failed to log email failure:', logError.message);
+      // Don't throw - this is just logging
     }
   }
 

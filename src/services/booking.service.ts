@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import TimeSlotModel from "../models/TimeSlot";
 import { TimeSlotService } from "./timeSlot.service";
 import { EmailService } from "./email.service";
+import { formatDateToYYYYMMDD } from "../utils/dateUtils";
 
 class BookingService {
   // Mark confirmed bookings as completed if their date/time is in the past
@@ -134,7 +135,7 @@ class BookingService {
       const requestedPersons = data.isVehicleBooking ? 1 : totalGuests;
       // Ensure we use Malaysia-local date string for slot lookups (avoid UTC shift)
       const slotDateStr = TimeSlotService.formatDateToMalaysiaTimezone(
-        data.date.toISOString().split('T')[0]
+        formatDateToYYYYMMDD(data.date)
       );
 
       const availability = await TimeSlotService.checkAvailability(
@@ -535,7 +536,7 @@ class BookingService {
 
       // Format date string for TimeSlotService
       const slotDateStr = TimeSlotService.formatDateToMalaysiaTimezone(
-        booking.date.toISOString().split('T')[0]
+        formatDateToYYYYMMDD(booking.date)
       );
 
       // Subtract booked count from time slot

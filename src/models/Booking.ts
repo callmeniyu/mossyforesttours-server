@@ -55,9 +55,9 @@ const BookingSchema: Schema = new Schema(
     slotId: { type: Schema.Types.ObjectId, required: false, ref: "TimeSlot" },
     date: { type: Date, required: true },
     time: { type: String, required: true },
-    adults: { type: Number, required: true, min: 1 },
-    children: { type: Number, required: true, min: 0 },
-    pickupLocation: { type: String, required: true },
+    adults: { type: Number, required: true, min: 1, max: 50 },
+    children: { type: Number, required: true, min: 0, max: 20 },
+    pickupLocation: { type: String, required: true, maxlength: 500 },
   status: { type: String, enum: ["pending", "confirmed", "cancelled", "completed"], default: "pending" },
     firstBookingMinimum: { type: Boolean, default: false },
     contactInfo: {
@@ -105,6 +105,7 @@ BookingSchema.index({ packageId: 1, date: 1 });
 BookingSchema.index({ slotId: 1 });
 BookingSchema.index({ status: 1, date: 1 });
 BookingSchema.index({ 'paymentInfo.paymentStatus': 1 });
+BookingSchema.index({ 'paymentInfo.paymentIntentId': 1 }, { unique: true, sparse: true }); // Prevent duplicate payments
 BookingSchema.index({ createdAt: -1 });
 BookingSchema.index({ reviewEmailSent: 1, date: 1 }); // For review email scheduler
 

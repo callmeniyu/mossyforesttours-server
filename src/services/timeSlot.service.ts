@@ -238,7 +238,11 @@ export class TimeSlotService {
                 throw new Error("Specific time slot not found")
             }
 
-            // STEP 3: Get current state and log it
+            // STEP 3: Validate inputs and use atomic updates to prevent race conditions
+            if (!personsCount || isNaN(personsCount) || personsCount < 0) {
+                throw new Error(`Invalid personsCount: ${personsCount}`);
+            }
+            
             const currentBookedCount = timeSlot.slots[slotIndex].bookedCount
             const currentMinimumPerson = timeSlot.slots[slotIndex].minimumPerson
 
@@ -273,6 +277,16 @@ export class TimeSlotService {
                 const originalMinimumPerson = packageDoc.minimumPerson || 1;
                 newMinimumPerson = originalMinimumPerson;
                 console.log(`� ALL BOOKINGS CANCELLED! Restoring minimumPerson from ${currentMinimumPerson} to ${originalMinimumPerson}`);
+            }
+
+            // VALIDATION: Prevent setting minimumPerson higher than available capacity
+            const slotCapacity = timeSlot.slots[slotIndex].capacity;
+            const remainingCapacity = slotCapacity - newBookedCount;
+            if (newMinimumPerson > remainingCapacity) {
+                throw new Error(
+                    `Cannot set minimumPerson (${newMinimumPerson}) higher than remaining capacity (${remainingCapacity}). ` +
+                    `Slot has ${newBookedCount} booked out of ${slotCapacity} total capacity.`
+                );
             }
 
             // STEP 6: Update the slot
@@ -403,9 +417,15 @@ export class TimeSlotService {
                 hour24 = hours
                 minutes = mins
 
-                if (period && period.toUpperCase() === 'PM' && hours !== 12) {
+                // Validate period is actually AM or PM
+                const normalizedPeriod = period?.toUpperCase();
+                if (normalizedPeriod !== 'AM' && normalizedPeriod !== 'PM') {
+                    throw new Error(`Invalid time period: ${period}. Must be AM or PM`);
+                }
+
+                if (normalizedPeriod === 'PM' && hours !== 12) {
                     hour24 += 12
-                } else if (period && period.toUpperCase() === 'AM' && hours === 12) {
+                } else if (normalizedPeriod === 'AM' && hours === 12) {
                     hour24 = 0
                 }
             } else {
@@ -455,41 +475,67 @@ export class TimeSlotService {
 
     /**
      * Format date to Malaysia timezone string (YYYY-MM-DD)
+     * Uses proper timezone API instead of manual offset calculation
      */
     private static formatDateToMYT(date: Date): string {
-        // Convert to Malaysia timezone (UTC+8)
-        const malaysiaOffset = 8 * 60 * 60 * 1000
-        const malaysiaTime = new Date(date.getTime() + malaysiaOffset)
-        return malaysiaTime.toISOString().split('T')[0]
+        if (!(date instanceof Date) || isNaN(date.getTime())) {
+            throw new Error('Invalid Date object provided to formatDateToMYT');
+        }
+        
+        return date.toLocaleDateString('en-CA', {
+            timeZone: 'Asia/Kuala_Lumpur',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
     }
 
     /**
      * Get current Malaysia timezone date and time
+     * Uses proper timezone API for accurate time conversion
      */
     static getMalaysiaDateTime(): { date: string; time: string; fullDateTime: Date } {
-        const now = new Date()
-        const malaysiaOffset = 8 * 60 * 60 * 1000
-        const malaysiaTime = new Date(now.getTime() + malaysiaOffset)
-
+        const now = new Date();
+        
         return {
-            date: malaysiaTime.toISOString().split('T')[0],
-            time: malaysiaTime.toLocaleTimeString('en-US', {
+            date: now.toLocaleDateString('en-CA', {
+                timeZone: 'Asia/Kuala_Lumpur',
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            }),
+            time: now.toLocaleTimeString('en-US', {
+                timeZone: 'Asia/Kuala_Lumpur',
                 hour12: true,
                 hour: 'numeric',
                 minute: '2-digit'
             }),
-            fullDateTime: malaysiaTime
-        }
+            fullDateTime: now
+        };
     }
 
     /**
      * Convert date string to Malaysia timezone format (YYYY-MM-DD)
+     * Uses proper timezone API instead of manual offset calculation
      */
     static formatDateToMalaysiaTimezone(dateString: string): string {
-        const date = new Date(dateString + 'T00:00:00.000Z')
-        const malaysiaOffset = 8 * 60 * 60 * 1000
-        const malaysiaTime = new Date(date.getTime() + malaysiaOffset)
-        return malaysiaTime.toISOString().split('T')[0]
+        // Validate input format
+        if (!/^\d{4}-\d{2}-\d{2}/.test(dateString)) {
+            throw new Error(`Invalid date string format: ${dateString}`);
+        }
+        
+        const date = new Date(dateString + 'T00:00:00.000Z');
+        
+        if (isNaN(date.getTime())) {
+            throw new Error(`Invalid date: ${dateString}`);
+        }
+        
+        return date.toLocaleDateString('en-CA', {
+            timeZone: 'Asia/Kuala_Lumpur',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+        });
     }
 
     /**

@@ -240,10 +240,18 @@ export class RollingTimeslotService {
 
     /**
      * Format date to Malaysia timezone (same as TimeSlotService)
+     * Uses proper timezone API for accurate conversion
      */
     private static formatDateToMYT(date: Date): string {
+        if (!(date instanceof Date) || isNaN(date.getTime())) {
+            throw new Error('Invalid Date object provided');
+        }
+        
         return date.toLocaleDateString("en-CA", {
-            timeZone: "Asia/Kuala_Lumpur"
+            timeZone: "Asia/Kuala_Lumpur",
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
         });
     }
 
