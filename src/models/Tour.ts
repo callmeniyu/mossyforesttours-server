@@ -39,6 +39,7 @@ export interface TourType extends Document {
     minimumPerson: number
     maximumPerson?: number
     vehicle?: string // Vehicle name for private tours
+    vehicleUnits?: number // Number of available vehicles for private tours
     seatCapacity?: number // Seat capacity for private tours (from vehicle)
     departureTimes: string[] // e.g. ["08:00 AM","01:30 PM"]
     label?: "Recommended" | "Popular" | "Best Value" | "Best Seller"
@@ -72,6 +73,7 @@ const TourSchema = new Schema<TourType>(
         minimumPerson: Number,
         maximumPerson: Number,
         vehicle: String, // Vehicle name for private tours
+        vehicleUnits: Number, // Number of available vehicles for private tours
         seatCapacity: Number, // Seat capacity for private tours (from vehicle)
         departureTimes: [String],
         label: { type: String, enum: ["Recommended", "Popular", "Best Value", "Best Seller"], default: null },

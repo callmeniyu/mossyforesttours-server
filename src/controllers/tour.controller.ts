@@ -59,18 +59,30 @@ export const createTour = async (req: Request, res: Response) => {
         try {
             // Determine capacity based on tour type
             let capacity
-            if (tourData.type === "private" && tourData.vehicle) {
-                // For Private tours: use vehicle.units (number of vehicles available)
-                try {
-                    const vehicleDoc = await Vehicle.findOne({ name: tourData.vehicle }).lean() as any
-                    if (vehicleDoc && typeof vehicleDoc.units === 'number') {
-                        capacity = vehicleDoc.units
-                    } else {
-                        capacity = 1 // Default to 1 vehicle if vehicle not found
+            if (tourData.type === "private") {
+                // For Private tours: capacity = number of vehicle units available
+                // Prioritize vehicleUnits from tour data, fallback to Vehicle collection
+                if (tourData.vehicleUnits && typeof tourData.vehicleUnits === 'number') {
+                    capacity = tourData.vehicleUnits
+                    console.log(`Private tour: Using vehicleUnits from tour data: ${capacity}`)
+                } else if (tourData.vehicle) {
+                    // Backwards compatibility: lookup from Vehicle collection
+                    try {
+                        const vehicleDoc = await Vehicle.findOne({ name: tourData.vehicle }).lean() as any
+                        if (vehicleDoc && typeof vehicleDoc.units === 'number') {
+                            capacity = vehicleDoc.units
+                            console.log(`Private tour: Using vehicleUnits from Vehicle collection: ${capacity}`)
+                        } else {
+                            capacity = 1 // Default to 1 vehicle if vehicle not found
+                            console.log(`Private tour: Vehicle not found, defaulting to 1 unit`)
+                        }
+                    } catch (err) {
+                        console.warn('Failed to lookup vehicle for private tour slot capacity, using default 1', err)
+                        capacity = 1
                     }
-                } catch (err) {
-                    console.warn('Failed to lookup vehicle for private tour slot capacity, using default 1', err)
-                    capacity = 1
+                } else {
+                    capacity = 1 // Default if no vehicle info provided
+                    console.log(`Private tour: No vehicle info, defaulting to 1 unit`)
                 }
             } else {
                 // For Co-tours: use maximumPerson (number of person seats)
@@ -283,19 +295,31 @@ export const updateTour = async (req: Request, res: Response) => {
             let capacity
             const tourType = tourData.type || existingTour.type
             const vehicleName = tourData.vehicle || existingTour.vehicle
+            const vehicleUnits = tourData.vehicleUnits || existingTour.vehicleUnits
 
-            if (tourType === "private" && vehicleName) {
-                // For Private tours: use vehicle.units (number of vehicles available)
-                try {
-                    const vehicleDoc = await Vehicle.findOne({ name: vehicleName }).lean() as any
-                    if (vehicleDoc && typeof vehicleDoc.units === 'number') {
-                        capacity = vehicleDoc.units
-                    } else {
-                        capacity = 1 // Default to 1 vehicle if vehicle not found
+            if (tourType === "private") {
+                // For Private tours: prioritize vehicleUnits, fallback to Vehicle collection
+                if (vehicleUnits && typeof vehicleUnits === 'number') {
+                    capacity = vehicleUnits
+                    console.log(`Update: Using vehicleUnits from tour data: ${capacity}`)
+                } else if (vehicleName) {
+                    // Backwards compatibility: lookup from Vehicle collection
+                    try {
+                        const vehicleDoc = await Vehicle.findOne({ name: vehicleName }).lean() as any
+                        if (vehicleDoc && typeof vehicleDoc.units === 'number') {
+                            capacity = vehicleDoc.units
+                            console.log(`Update: Using vehicleUnits from Vehicle collection: ${capacity}`)
+                        } else {
+                            capacity = 1 // Default to 1 vehicle if vehicle not found
+                            console.log(`Update: Vehicle not found, defaulting to 1 unit`)
+                        }
+                    } catch (err) {
+                        console.warn('Failed to lookup vehicle for private tour update, using default 1', err)
+                        capacity = 1
                     }
-                } catch (err) {
-                    console.warn('Failed to lookup vehicle for private tour update, using default 1', err)
+                } else {
                     capacity = 1
+                    console.log(`Update: No vehicle info, defaulting to 1 unit`)
                 }
             } else {
                 // For Co-tours: use maximumPerson (number of person seats)
@@ -304,11 +328,17 @@ export const updateTour = async (req: Request, res: Response) => {
 
             // Calculate existing capacity to compare for changes
             let existingCapacity
-            if (existingTour.type === "private" && existingTour.vehicle) {
-                try {
-                    const vehicleDoc = await Vehicle.findOne({ name: existingTour.vehicle }).lean() as any
-                    existingCapacity = (vehicleDoc && typeof vehicleDoc.units === 'number') ? vehicleDoc.units : 1
-                } catch (err) {
+            if (existingTour.type === "private") {
+                if (existingTour.vehicleUnits && typeof existingTour.vehicleUnits === 'number') {
+                    existingCapacity = existingTour.vehicleUnits
+                } else if (existingTour.vehicle) {
+                    try {
+                        const vehicleDoc = await Vehicle.findOne({ name: existingTour.vehicle }).lean() as any
+                        existingCapacity = (vehicleDoc && typeof vehicleDoc.units === 'number') ? vehicleDoc.units : 1
+                    } catch (err) {
+                        existingCapacity = 1
+                    }
+                } else {
                     existingCapacity = 1
                 }
             } else {

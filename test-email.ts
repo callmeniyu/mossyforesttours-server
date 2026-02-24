@@ -14,7 +14,6 @@ import { BookingEmailData } from './src/services/email.service';
  * 3. Run: npm run test-email  (or add this script to package.json)
  *    OR directly: npx ts-node test-email.ts
  */
-
 // ============================================
 // CONFIGURATION - CHANGE THIS TO YOUR EMAIL
 // ============================================
