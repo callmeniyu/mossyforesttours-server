@@ -1,6 +1,7 @@
 // Import Stripe using require to avoid module resolution issues on some systems
 const Stripe = require('stripe');
 import { Request, Response } from 'express';
+import mongoose from 'mongoose';
 import { EmailService } from '../services/email.service';
 // TimeSlotService used to update timeslot bookedCount; import once to avoid redeclaration
 const { TimeSlotService } = require('../services/timeSlot.service');
@@ -73,12 +74,33 @@ export class PaymentController {
         });
       }
 
+      // Fetch package details to get package name
+      let packageName = '';
+      if (bookingData.packageId) {
+        try {
+          if (bookingData.packageType === 'tour') {
+            const Tour = mongoose.model('Tour');
+            const tour = await Tour.findById(bookingData.packageId);
+            packageName = tour?.title || '';
+          } else if (bookingData.packageType === 'transfer') {
+            const Transfer = mongoose.model('Transfer');
+            const transfer = await Transfer.findById(bookingData.packageId);
+            packageName = transfer?.title || '';
+          }
+        } catch (err) {
+          console.error('[PAYMENT] Error fetching package details:', err);
+        }
+      }
+
       // Convert amount to cents (Stripe uses smallest currency unit)
       const amountInCents = Math.round(amount * 100);
 
       console.log('[PAYMENT] Creating Stripe payment intent with amount:', amountInCents, 'cents');
 
-      // Create payment intent
+      // Extract phone number and format it
+      const phone = bookingData.contactInfo?.phone || '';
+      
+      // Create payment intent with all required metadata
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountInCents,
         currency: currency.toLowerCase(),
@@ -89,6 +111,7 @@ export class PaymentController {
           bookingType: 'single',
           packageType: bookingData.packageType || '',
           packageId: bookingData.packageId || '',
+          packageName: packageName,
           // Include bookingId in metadata if provided so webhooks can map back
           bookingId: bookingData._id || bookingData.bookingId || '',
           date: bookingData.date || '',
@@ -97,6 +120,9 @@ export class PaymentController {
           children: bookingData.children?.toString() || '0',
           customerEmail: bookingData.contactInfo?.email || '',
           customerName: bookingData.contactInfo?.name || '',
+          phone: phone,
+          pickupLocation: bookingData.pickupLocation || '',
+          platform: 'mossyforesttours',
           ...metadata
         },
         description: `Booking for ${bookingData.packageType} - ${bookingData.contactInfo?.name || 'Guest'}`,
@@ -166,6 +192,9 @@ export class PaymentController {
 
       console.log('[PAYMENT] Creating Stripe payment intent for cart with amount:', amountInCents, 'cents');
 
+      // Extract phone number
+      const phone = contactInfo.phone || '';
+
       // Create payment intent
       const paymentIntent = await stripe.paymentIntents.create({
         amount: amountInCents,
@@ -178,7 +207,9 @@ export class PaymentController {
           itemCount: cartData.items.length.toString(),
           customerEmail: contactInfo.email || '',
           customerName: contactInfo.name || '',
+          phone: phone,
           userEmail: cartData.userEmail || '',
+          platform: 'mossyforesttours',
           ...metadata
         },
         description: `Cart booking (${cartData.items.length} items) - ${contactInfo.name || 'Guest'}`,

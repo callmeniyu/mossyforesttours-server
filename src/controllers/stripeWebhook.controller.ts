@@ -151,6 +151,21 @@ export async function stripeWebhook(req: Request, res: Response) {
     if (!sig) throw new Error('Missing stripe signature');
     // express.raw middleware places the raw Buffer in req.body
     const rawBody = (req as any).body;
+    
+    // Debug logging
+    console.log('🔍 Webhook Debug Info:');
+    console.log('- Signature present:', !!sig);
+    console.log('- Body type:', typeof rawBody);
+    console.log('- Body is Buffer:', Buffer.isBuffer(rawBody));
+    console.log('- Body length:', rawBody?.length);
+    console.log('- Endpoint secret configured:', !!endpointSecret);
+    
+    // Ensure we have a Buffer
+    if (!Buffer.isBuffer(rawBody)) {
+      console.error('❌ Body is not a Buffer, it is:', typeof rawBody);
+      throw new Error('Request body must be a raw Buffer for signature verification');
+    }
+    
     event = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err: any) {
     console.error('Stripe webhook signature verification failed:', err.message || err);

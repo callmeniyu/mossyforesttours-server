@@ -4,17 +4,9 @@
     {
       "src": "api/index.ts",
       "use": "@vercel/node"
-    },
-    {
-      "src": "api/stripe-webhook.ts",
-      "use": "@vercel/node"
     }
   ],
   "routes": [
-    {
-      "src": "/api/stripe-webhook",
-      "dest": "api/stripe-webhook.ts"
-    },
     {
       "src": "/(.*)",
       "dest": "api/index.ts"
