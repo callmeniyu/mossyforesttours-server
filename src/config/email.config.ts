@@ -16,7 +16,7 @@ export const emailConfig = {
     email: process.env.FROM_EMAIL || process.env.SMTP_USER || 'noreply@mossyforesttours.my',
   },
   templates: {
-    logo: process.env.COMPANY_LOGO || 'https://mossyforest.my/logo.png',
+    logo: process.env.COMPANY_LOGO || 'https://www.mossyforest.my/public/favicons/favicon-16x16.png',
     website: process.env.COMPANY_WEBSITE || 'https://mossyforest.my',
     supportEmail: process.env.SUPPORT_EMAIL || 'support@mossyforest.my',
     supportPhone: process.env.SUPPORT_PHONE || '+60 19-659 2141',

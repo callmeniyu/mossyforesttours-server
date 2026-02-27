@@ -5,6 +5,7 @@ import morgan from "morgan"
 import helmet from "helmet"
 import mongoose from "mongoose"
 import webhookRoutes from "./routes/webhook.routes"
+import { stripeWebhook } from "./controllers/stripeWebhook.controller"
 import tourRoutes from "./routes/tour.routes"
 import transferRoutes from "./routes/transfer.routes"
 import bookingRoutes from "./routes/booking.routes"
@@ -44,6 +45,9 @@ app.use(morgan("dev"))
 
 // Stripe webhook needs raw body for signature verification. Mount webhook route with raw middleware.
 app.use('/webhook', express.raw({ type: 'application/json' }), webhookRoutes);
+
+// Also handle /api/stripe-webhook path (configured in Stripe dashboard)
+app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), stripeWebhook);
 
 // Regular JSON body parsing for other routes
 app.use(express.json())
