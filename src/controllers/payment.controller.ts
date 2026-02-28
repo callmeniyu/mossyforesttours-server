@@ -125,7 +125,7 @@ export class PaymentController {
           platform: 'mossyforesttours',
           ...metadata
         },
-        description: `Booking for ${bookingData.packageType} - ${bookingData.contactInfo?.name || 'Guest'}`,
+        description: `Mossyforest ${bookingData.packageType} - ${bookingData.contactInfo?.name || 'Guest'}`,
       });
 
       console.log('[PAYMENT] Payment intent created successfully:', paymentIntent.id);
@@ -212,7 +212,7 @@ export class PaymentController {
           platform: 'mossyforesttours',
           ...metadata
         },
-        description: `Cart booking (${cartData.items.length} items) - ${contactInfo.name || 'Guest'}`,
+        description: `Mossyforest Cart booking (${cartData.items.length} items) - ${contactInfo.name || 'Guest'}`,
       });
 
       console.log('[PAYMENT] Cart payment intent created successfully:', paymentIntent.id);

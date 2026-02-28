@@ -19,7 +19,6 @@ export interface TimeSlotType extends Document {
   isAvailable: boolean
   booked: number
   capacity: number
-  blackoutDate: boolean
   cutoffHours: number
 }
 
@@ -42,7 +41,6 @@ const TimeSlotSchema = new Schema<TimeSlotType>(
     isAvailable: { type: Boolean, default: true },
     booked: { type: Number, default: 0 },
     capacity: { type: Number, required: true },
-    blackoutDate: { type: Boolean, default: false },
     cutoffHours: { type: Number, default: 10 }, // Configurable cutoff hours
   },
   { timestamps: true }
@@ -51,7 +49,6 @@ const TimeSlotSchema = new Schema<TimeSlotType>(
 // Add compound indexes for frequently queried fields
 TimeSlotSchema.index({ packageType: 1, packageId: 1, date: 1 }); // Primary query pattern
 TimeSlotSchema.index({ date: 1, isAvailable: 1 }); // Availability queries
-TimeSlotSchema.index({ packageId: 1, date: 1, blackoutDate: 1 }); // Blackout date checks
 
 import mongoose from 'mongoose';
 const TimeSlotModel = mongoose.models.TimeSlot ? (mongoose.models.TimeSlot as mongoose.Model<TimeSlotType>) : model<TimeSlotType>("TimeSlot", TimeSlotSchema);

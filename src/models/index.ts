@@ -8,7 +8,6 @@ import './Booking';
 import './User';
 import './Cart';
 import './Blog';
-import './BlackoutDate';
 import './Vehicle';
 import './WebhookEvent';
 import './FailedWebhookEvent';

@@ -151,32 +151,19 @@ export class EmailService {
 
   /**
    * Log email failure to database for admin follow-up
+   * Note: Email failures are now logged to console for debugging.
+   * For production, consider using a proper logging service.
    */
   private async logEmailFailure(booking: BookingEmailData, reason: string): Promise<void> {
     try {
-      const mongoose = require('mongoose');
-      const FailedEmailLog = mongoose.model('FailedEmailLog', new mongoose.Schema({
-        bookingId: String,
-        customerEmail: String,
-        customerName: String,
-        packageName: String,
-        reason: String,
-        bookingData: Object,
-        resolved: { type: Boolean, default: false },
-        createdAt: { type: Date, default: Date.now }
-      }));
-      
-      await FailedEmailLog.create({
+      console.error('📝 Email failure logged:', {
         bookingId: booking.bookingId,
         customerEmail: booking.customerEmail,
         customerName: booking.customerName,
         packageName: booking.packageName,
         reason,
-        bookingData: booking,
-        resolved: false
+        timestamp: new Date().toISOString()
       });
-      
-      console.log('📝 Email failure logged for admin review');
     } catch (logError: any) {
       console.error('❌ Failed to log email failure:', logError.message);
       // Don't throw - this is just logging

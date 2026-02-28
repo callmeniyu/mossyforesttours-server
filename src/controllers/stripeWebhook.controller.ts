@@ -159,6 +159,8 @@ export async function stripeWebhook(req: Request, res: Response) {
     console.log('- Body is Buffer:', Buffer.isBuffer(rawBody));
     console.log('- Body length:', rawBody?.length);
     console.log('- Endpoint secret configured:', !!endpointSecret);
+    console.log('- Webhook secret prefix:', endpointSecret?.substring(0, 15) + '...');
+    console.log('- Signature header:', sig?.substring(0, 50) + '...');
     
     // Ensure we have a Buffer
     if (!Buffer.isBuffer(rawBody)) {

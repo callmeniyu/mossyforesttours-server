@@ -38,7 +38,6 @@ export class AvailabilityService {
       packageType,
       date,
       isAvailable: true,
-      blackoutDate: false,
     });
 
     if (!timeSlot) return null;
