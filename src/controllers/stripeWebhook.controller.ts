@@ -13,8 +13,19 @@ async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Pro
   try {
     const metadata = intent.metadata;
     
-    // Validate required metadata
-    if (!metadata.packageType || !metadata.packageId || !metadata.date || !metadata.time || !metadata.customerEmail || !metadata.customerName) {
+    // IDEMPOTENCY: Check if booking already exists for this payment intent
+    // This prevents duplicate bookings if webhook is retried or called twice
+    const BookingModel = require('../models/Booking').default;
+    const existingBooking = await BookingModel.findOne({
+      $or: [
+        { 'paymentInfo.stripePaymentIntentId': intent.id },
+        { 'paymentInfo.paymentIntentId': intent.id }
+      ]
+    });
+    if (existingBooking) {
+      console.log('ℹ️ Booking already exists for payment intent:', intent.id, '→', existingBooking._id);
+      return existingBooking;
+    }
       console.error('❌ Missing required metadata to create booking:', metadata);
       return null;
     }
