@@ -316,19 +316,14 @@ export async function stripeWebhook(req: Request, res: Response) {
         break;
       }
       case 'payment_intent.canceled': {
-        // Do NOT automatically mark bookings as cancelled for Stripe auto-cancellations
-        // Only process if there's a specific failure reason indicating genuine user/card issues
+        // Cancel the pre-created pending booking when payment intent is canceled
+        // This handles both payment failures AND user abandonment (tab close, timeout, etc)
         const intent = event.data.object as Stripe.PaymentIntent;
-        const hasPaymentError = intent.last_payment_error && intent.last_payment_error.code !== 'payment_intent_unexpected_state';
+        const bookingId = intent.metadata?.bookingId;
+        const reason = intent.last_payment_error?.message || 'Payment cancelled or abandoned';
         
-        if (hasPaymentError) {
-          console.log('🔍 Processing payment_intent.canceled with genuine payment error:', intent.last_payment_error);
-          const bookingId = intent.metadata?.bookingId;
-          const reason = intent.last_payment_error?.message || 'payment_failed';
-          await BookingService.handleStripeFailure({ bookingId, paymentIntentId: intent.id, reason });
-        } else {
-          console.log('🚫 Ignoring automatic payment_intent.canceled without payment error (likely tab switch/timeout)');
-        }
+        console.log('🔍 Processing payment_intent.canceled for booking:', bookingId, '| Reason:', reason);
+        await BookingService.handleStripeFailure({ bookingId, paymentIntentId: intent.id, reason });
         break;
       }
       default:

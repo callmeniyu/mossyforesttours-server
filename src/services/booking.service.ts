@@ -292,6 +292,19 @@ class BookingService {
       if (opts.bookingId) filter._id = opts.bookingId;
       if (opts.paymentIntentId) filter['paymentInfo.stripePaymentIntentId'] = opts.paymentIntentId;
 
+      // First fetch the booking to get slot details for cleanup
+      const existingBooking = await BookingModel.findOne(filter);
+      if (!existingBooking) {
+        console.log(`⚠️ No booking found to cancel for filter:`, filter);
+        return null;
+      }
+
+      // Only cancel if not already cancelled (idempotent)
+      if (existingBooking.status === 'cancelled') {
+        console.log(`ℹ️ Booking ${existingBooking._id} already cancelled`);
+        return existingBooking;
+      }
+
       const update: any = {
         'paymentInfo.paymentStatus': 'failed',
         'paymentInfo.failedReason': opts.reason || 'payment_failed',
@@ -302,7 +315,31 @@ class BookingService {
       const booking = await BookingModel.findOneAndUpdate(filter, { $set: update }, { new: true });
       if (booking) {
         console.log(`⚠️ Booking ${booking._id} marked failed/cancelled via Stripe event`);
-        // Optionally notify customer/admin
+        
+        // Release the reserved slot
+        try {
+          const { TimeSlotService } = require('./timeSlot.service');
+          const totalGuests = (booking.adults || 0) + (booking.children || 0);
+          
+          // Convert date to Malaysia timezone format for slot lookup
+          let dateStr = booking.date instanceof Date 
+            ? booking.date.toISOString().split('T')[0]
+            : String(booking.date).split('T')[0];
+          dateStr = TimeSlotService.formatDateToMalaysiaTimezone(dateStr);
+          
+          await TimeSlotService.updateSlotBooking(
+            booking.packageType,
+            booking.packageId,
+            dateStr,
+            booking.time,
+            totalGuests,
+            'subtract' // Release the slot
+          );
+          console.log(`✅ Released slot for cancelled booking ${booking._id}`);
+        } catch (slotError) {
+          console.error(`❌ Failed to release slot for cancelled booking ${booking._id}:`, slotError);
+          // Don't fail the cancellation if slot release fails
+        }
       }
       return booking;
     } catch (err) {
