@@ -12,7 +12,7 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Promise<any> {
   try {
     const metadata = intent.metadata;
-    
+
     // IDEMPOTENCY: Check if booking already exists for this payment intent
     // This prevents duplicate bookings if webhook is retried or called twice
     const BookingModel = require('../models/Booking').default;
@@ -26,6 +26,9 @@ async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Pro
       console.log('ℹ️ Booking already exists for payment intent:', intent.id, '→', existingBooking._id);
       return existingBooking;
     }
+
+    // Validate required metadata
+    if (!metadata.packageType || !metadata.packageId || !metadata.date || !metadata.time || !metadata.customerEmail || !metadata.customerName) {
       console.error('❌ Missing required metadata to create booking:', metadata);
       return null;
     }
