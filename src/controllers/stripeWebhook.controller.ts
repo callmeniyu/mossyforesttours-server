@@ -200,109 +200,50 @@ export async function stripeWebhook(req: Request, res: Response) {
         const bookingId = intent.metadata?.bookingId;
         const amount = intent.amount ? (intent.amount / 100) : undefined;
         
-        // Confirm the pre-created pending booking — slot is already reserved, just flip status
-        const updatedBooking = await BookingService.handleStripeSuccess({ bookingId, paymentIntentId: intent.id, amount, currency: intent.currency });
+        // Check if booking already exists (in case webhook fires twice or another process created it)
+        let existingBooking = null;
+        if (bookingId) {
+          existingBooking = await (require('../models/Booking').default).findById(bookingId);
+        }
         
-        if (!updatedBooking) {
-          // Booking not found — this should not happen because createPaymentIntent always pre-creates it.
-          // Log for admin investigation but do NOT create a new booking here (would duplicate).
-          console.error('🚨 WEBHOOK: No booking found for payment intent:', intent.id, '— manual review required');
-          try {
-            await (FailedWebhookEvent as any).create({
-              eventId: event.id,
-              eventType: event.type,
-              source: 'stripe',
-              paymentIntentId: intent.id,
-              customerEmail: intent.metadata.customerEmail,
-              amount: intent.amount / 100,
-              currency: intent.currency,
-              metadata: intent.metadata,
-              errorMessage: 'No pre-created booking found for this payment intent',
-              resolved: false
-            });
-          } catch (logError) {
-            console.error('❌ Failed to log missing booking event:', logError);
-          }
-        } else {
-          console.log('✅ WEBHOOK: Booking confirmed:', updatedBooking._id);
-
-          // Send confirmation email — webhook is the sole authority for emails
-          if (!updatedBooking.confirmationEmailSent) {
+        if (!existingBooking) {
+          // No existing booking — create it from payment intent metadata (primary flow)
+          console.log('📝 WEBHOOK: Creating booking from payment intent metadata...');
+          existingBooking = await createBookingFromPaymentIntent(intent);
+          
+          if (!existingBooking) {
+            console.error('🚨 WEBHOOK: Failed to create booking from payment intent:', intent.id);
             try {
-              const { EmailService } = require('../services/email.service');
-              const emailService = new EmailService();
-
-              // Fetch package details for email
-              let packageDetails: any = null;
-              const packageType = updatedBooking.packageType || intent.metadata.packageType;
-              const packageId = updatedBooking.packageId;
-
-              if (packageType === 'tour') {
-                const TourModel = mongoose.model('Tour');
-                packageDetails = await TourModel.findById(packageId);
-              } else if (packageType === 'transfer') {
-                const TransferModel = mongoose.model('Transfer');
-                packageDetails = await TransferModel.findById(packageId);
-              }
-
-              const emailData: any = {
-                customerName: updatedBooking.contactInfo?.name || intent.metadata.customerName,
-                customerEmail: updatedBooking.contactInfo?.email || intent.metadata.customerEmail,
-                bookingId: updatedBooking._id.toString(),
-                packageId,
-                packageName: packageDetails?.title || `${packageType} Package`,
-                packageType,
-                date: updatedBooking.date,
-                time: updatedBooking.time,
-                adults: updatedBooking.adults,
-                children: updatedBooking.children || 0,
-                pickupLocation: updatedBooking.pickupLocation,
-                total: updatedBooking.total,
-                currency: updatedBooking.paymentInfo?.currency || intent.currency.toUpperCase()
-              };
-
-              // Add transfer-specific details
-              if (packageType === 'transfer' && packageDetails) {
-                emailData.from = packageDetails.from;
-                emailData.to = packageDetails.to;
-                if (packageDetails.type === 'Private') {
-                  emailData.isVehicleBooking = true;
-                  emailData.vehicleName = packageDetails.vehicle;
-                  emailData.vehicleSeatCapacity = packageDetails.seatCapacity;
-                }
-              }
-
-              // Add vehicle information for private tours
-              if (packageType === 'tour' && packageDetails && packageDetails.type === 'private') {
-                emailData.isVehicleBooking = true;
-                emailData.vehicleName = packageDetails.vehicle;
-                emailData.vehicleSeatCapacity = packageDetails.seatCapacity;
-              }
-
-              // Add pickup guidelines
-              if (packageDetails?.details?.pickupGuidelines) {
-                emailData.pickupGuidelines = packageDetails.details.pickupGuidelines;
-              } else if (packageType === 'transfer' && (packageDetails?.details as any)?.pickupDescription) {
-                emailData.pickupGuidelines = (packageDetails.details as any).pickupDescription;
-              }
-
-              const emailSent = await emailService.sendBookingConfirmation(emailData);
-
-              if (emailSent) {
-                console.log('✅ WEBHOOK: Confirmation email sent for booking:', updatedBooking._id);
-                const BookingModel = require('../models/Booking').default;
-                await BookingModel.findByIdAndUpdate(updatedBooking._id, {
-                  $set: { confirmationEmailSent: true, confirmationEmailSentAt: new Date() }
-                });
-              } else {
-                console.error('⚠️ WEBHOOK: Failed to send confirmation email for booking:', updatedBooking._id);
-              }
-            } catch (emailError) {
-              console.error('❌ WEBHOOK: Error sending confirmation email:', emailError);
-              // Don't fail the webhook response on email error — Stripe will retry the event
+              await (FailedWebhookEvent as any).create({
+                eventId: event.id,
+                eventType: event.type,
+                source: 'stripe',
+                paymentIntentId: intent.id,
+                customerEmail: intent.metadata.customerEmail,
+                amount: intent.amount / 100,
+                currency: intent.currency,
+                metadata: intent.metadata,
+                errorMessage: 'Failed to create booking from payment intent metadata',
+                resolved: false
+              });
+            } catch (logError) {
+              console.error('❌ Failed to log failed booking creation:', logError);
             }
           } else {
-            console.log('ℹ️ WEBHOOK: Confirmation email already sent for booking:', updatedBooking._id);
+            console.log('✅ WEBHOOK: Booking created successfully:', existingBooking._id);
+          }
+        } else {
+          // Booking exists — just confirm it (edge case: if something pre-created it)
+          console.log('✅ WEBHOOK: Booking already exists, confirming:', existingBooking._id);
+          const updatedBooking = await BookingService.handleStripeSuccess({ 
+            bookingId: existingBooking._id.toString(), 
+            paymentIntentId: intent.id, 
+            amount, 
+            currency: intent.currency 
+          });
+          
+          if (updatedBooking) {
+            existingBooking = updatedBooking;
           }
         }
         break;

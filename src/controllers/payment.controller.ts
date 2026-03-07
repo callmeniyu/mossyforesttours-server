@@ -112,7 +112,6 @@ export class PaymentController {
           packageType: bookingData.packageType || '',
           packageId: bookingData.packageId || '',
           packageName: packageName,
-          bookingId: '', // Will be updated after booking creation
           date: bookingData.date || '',
           time: bookingData.time || '',
           adults: bookingData.adults?.toString() || '0',
@@ -120,7 +119,10 @@ export class PaymentController {
           customerEmail: bookingData.contactInfo?.email || '',
           customerName: bookingData.contactInfo?.name || '',
           phone: phone,
+          whatsapp: bookingData.contactInfo?.whatsapp || '',
           pickupLocation: bookingData.pickupLocation || '',
+          isVehicleBooking: bookingData.isVehicleBooking?.toString() || 'false',
+          vehicleSeatCapacity: bookingData.vehicleSeatCapacity?.toString() || '',
           platform: 'mossyforesttours',
           ...metadata
         },
@@ -129,69 +131,12 @@ export class PaymentController {
 
       console.log('[PAYMENT] Payment intent created successfully:', paymentIntent.id);
 
-      // STEP 2: Pre-create a PENDING booking immediately with the payment intent ID
-      // This ensures the webhook and confirm-payment always find an existing booking to update
-      // and never create duplicate bookings simultaneously
-      let preCreatedBookingId: string | null = null;
-      try {
-        const BookingService = require('../services/booking.service').default;
-        const pendingBooking = await BookingService.createBookingDirect({
-          packageType: bookingData.packageType,
-          packageId: new mongoose.Types.ObjectId(bookingData.packageId),
-          date: new Date(bookingData.date),
-          time: bookingData.time,
-          adults: bookingData.adults || 1,
-          children: bookingData.children || 0,
-          pickupLocation: bookingData.pickupLocation || '',
-          contactInfo: {
-            name: bookingData.contactInfo?.name || '',
-            email: bookingData.contactInfo?.email || '',
-            phone: bookingData.contactInfo?.phone || '',
-            whatsapp: bookingData.contactInfo?.whatsapp || ''
-          },
-          subtotal: bookingData.subtotal || amount,
-          total: bookingData.total || amount,
-          paymentInfo: {
-            paymentIntentId: paymentIntent.id,
-            stripePaymentIntentId: paymentIntent.id, // Both field names for compatibility
-            amount,
-            bankCharge: Math.round(amount * 0.028 * 100) / 100,
-            currency: currency.toLowerCase(),
-            paymentStatus: 'pending', // Pending until payment confirmed
-            paymentMethod: 'stripe'
-          },
-          isVehicleBooking: bookingData.isVehicleBooking || false,
-          vehicleSeatCapacity: bookingData.vehicleSeatCapacity
-        });
-        preCreatedBookingId = pendingBooking._id.toString();
-        console.log('[PAYMENT] ✅ Pre-created pending booking:', preCreatedBookingId);
-
-        // STEP 3: Update payment intent metadata with bookingId so webhook can find it
-        await stripe.paymentIntents.update(paymentIntent.id, {
-          metadata: { bookingId: preCreatedBookingId }
-        });
-        console.log('[PAYMENT] ✅ Updated payment intent metadata with bookingId:', preCreatedBookingId);
-      } catch (bookingError: any) {
-        // If booking pre-creation fails (e.g. slot unavailable), cancel the payment intent
-        console.error('[PAYMENT] ❌ Failed to pre-create pending booking:', bookingError.message);
-        try {
-          await stripe.paymentIntents.cancel(paymentIntent.id);
-          console.log('[PAYMENT] ✅ Cancelled payment intent due to booking creation failure');
-        } catch (cancelError) {
-          console.error('[PAYMENT] ❌ Failed to cancel payment intent:', cancelError);
-        }
-        return res.status(400).json({
-          success: false,
-          error: bookingError.message || 'Failed to reserve time slot'
-        });
-      }
-
+      // No pre-booking created — webhook will create booking when payment succeeds
       res.json({
         success: true,
         data: {
           clientSecret: paymentIntent.client_secret,
           paymentIntentId: paymentIntent.id,
-          bookingId: preCreatedBookingId, // Return bookingId to client
           amount: paymentIntent.amount,
           currency: paymentIntent.currency
         }
@@ -559,166 +504,44 @@ export class PaymentController {
         }
 
       } else {
-        // Handle single booking - find existing booking by payment intent ID
-        console.log('[PAYMENT] Single booking - finding existing booking...');
+        // Handle single booking - poll for webhook to create the booking
+        console.log('[PAYMENT] Single booking - waiting for webhook to create booking...');
         
-        // Look for booking with either pending OR succeeded status (webhook may have already updated)
-        // Check both paymentIntentId and stripePaymentIntentId to handle bookings created by webhook
-        const existingBooking = await Booking.findOne({
-          $or: [
-            { 'paymentInfo.paymentIntentId': paymentIntent.id },
-            { 'paymentInfo.stripePaymentIntentId': paymentIntent.id }
-          ]
-        });
-
-        if (!existingBooking) {
-          // Should never happen — createPaymentIntent always pre-creates the booking.
-          // Return an error instead of creating a duplicate.
-          console.error('[PAYMENT] ❌ No pre-created booking found for intent:', paymentIntent.id);
-          return res.status(404).json({
-            success: false,
-            error: 'Booking not found. Please contact support with your payment reference: ' + paymentIntent.id
+        let createdBooking: any = null;
+        const maxAttempts = 30; // 15 seconds total
+        const delayMs = 500; // Check every 500ms
+        
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          await new Promise(resolve => setTimeout(resolve, delayMs));
+          
+          // Look for booking created by webhook
+          const booking = await Booking.findOne({
+            $or: [
+              { 'paymentInfo.paymentIntentId': paymentIntent.id },
+              { 'paymentInfo.stripePaymentIntentId': paymentIntent.id }
+            ]
           });
-        }
-
-        console.log('[PAYMENT] Found booking:', existingBooking._id, '— current status:', existingBooking.paymentInfo?.paymentStatus);
-
-        // Wait for webhook to confirm the booking (it handles status update + email)
-        // Poll for up to 15 seconds for webhook to complete
-        let confirmedBooking = existingBooking;
-        if (existingBooking.paymentInfo?.paymentStatus !== 'succeeded') {
-          console.log('[PAYMENT] Waiting for webhook to confirm booking...');
           
-          const maxAttempts = 30; // 15 seconds total
-          const delayMs = 500; // Check every 500ms
-          
-          for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-            await new Promise(resolve => setTimeout(resolve, delayMs));
-            
-            const updatedBooking = await Booking.findById(existingBooking._id);
-            if (updatedBooking?.paymentInfo?.paymentStatus === 'succeeded') {
-              confirmedBooking = updatedBooking;
-              console.log(`[PAYMENT] ✅ Booking confirmed by webhook after ${attempt * delayMs}ms`);
-              break;
-            }
-            
-            if (attempt === maxAttempts) {
-              // Webhook didn't fire in time — confirm manually as fallback
-              console.log('[PAYMENT] ⚠️ Webhook timeout — confirming booking manually as fallback');
-              
-              const manuallyConfirmed = await Booking.findOneAndUpdate(
-                {
-                  _id: existingBooking._id,
-                  'paymentInfo.paymentStatus': { $ne: 'succeeded' }
-                },
-                {
-                  $set: {
-                    status: 'confirmed',
-                    'paymentInfo.paymentStatus': 'succeeded',
-                    'paymentInfo.paymentMethod': 'stripe',
-                    'paymentInfo.updatedAt': new Date()
-                  }
-                },
-                { new: true }
-              );
-              
-              if (manuallyConfirmed) {
-                confirmedBooking = manuallyConfirmed;
-                console.log('[PAYMENT] ✅ Booking manually confirmed (webhook was slow)');
-                
-                // Send confirmation email as fallback (webhook might not have sent it)
-                if (!confirmedBooking.confirmationEmailSent) {
-                  try {
-                    console.log('[PAYMENT] Sending confirmation email (fallback)...');
-                    
-                    // Get package details for email
-                    let packageDetails: any = null;
-                    if (confirmedBooking.packageType === 'tour') {
-                      const mongoose = require('mongoose');
-                      const TourModel = mongoose.model('Tour');
-                      packageDetails = await TourModel.findById(confirmedBooking.packageId);
-                    } else if (confirmedBooking.packageType === 'transfer') {
-                      const mongoose = require('mongoose');
-                      const TransferModel = mongoose.model('Transfer');
-                      packageDetails = await TransferModel.findById(confirmedBooking.packageId);
-                    }
-                    
-                    const emailData: any = {
-                      customerName: confirmedBooking.contactInfo?.name,
-                      customerEmail: confirmedBooking.contactInfo?.email,
-                      bookingId: confirmedBooking._id.toString(),
-                      packageId: confirmedBooking.packageId,
-                      packageName: packageDetails?.title || (confirmedBooking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service'),
-                      packageType: confirmedBooking.packageType,
-                      date: confirmedBooking.date,
-                      time: confirmedBooking.time,
-                      adults: confirmedBooking.adults,
-                      children: confirmedBooking.children || 0,
-                      pickupLocation: confirmedBooking.pickupLocation,
-                      total: confirmedBooking.total,
-                      currency: confirmedBooking.paymentInfo?.currency || 'MYR'
-                    };
-                    
-                    // Add transfer-specific details
-                    if (confirmedBooking.packageType === 'transfer' && packageDetails) {
-                      emailData.from = packageDetails.from;
-                      emailData.to = packageDetails.to;
-                      if (packageDetails.type === 'Private') {
-                        emailData.isVehicleBooking = true;
-                        emailData.vehicleName = packageDetails.vehicle;
-                        emailData.vehicleSeatCapacity = packageDetails.seatCapacity;
-                      }
-                    }
-                    
-                    // Add vehicle information for private tours
-                    if (confirmedBooking.packageType === 'tour' && packageDetails && packageDetails.type === 'private') {
-                      emailData.isVehicleBooking = true;
-                      emailData.vehicleName = packageDetails.vehicle;
-                      emailData.vehicleSeatCapacity = packageDetails.seatCapacity;
-                    }
-                    
-                    // Add pickup guidelines
-                    if (packageDetails?.details?.pickupGuidelines) {
-                      emailData.pickupGuidelines = packageDetails.details.pickupGuidelines;
-                    } else if (confirmedBooking.packageType === 'transfer' && (packageDetails?.details as any)?.pickupDescription) {
-                      emailData.pickupGuidelines = (packageDetails.details as any).pickupDescription;
-                    }
-                    
-                    const emailService = new EmailService();
-                    const emailSent = await emailService.sendBookingConfirmation(emailData);
-                    
-                    if (emailSent) {
-                      await Booking.findByIdAndUpdate(confirmedBooking._id, {
-                        $set: { confirmationEmailSent: true, confirmationEmailSentAt: new Date() }
-                      });
-                      console.log('[PAYMENT] ✅ Confirmation email sent (fallback)');
-                    }
-                  } catch (emailError) {
-                    console.error('[PAYMENT] ❌ Failed to send fallback email:', emailError);
-                    // Don't fail the response — booking is confirmed
-                  }
-                }
-              } else {
-                // Another process already confirmed it
-                const finalBooking = await Booking.findById(existingBooking._id);
-                if (finalBooking) {
-                  confirmedBooking = finalBooking;
-                  console.log('[PAYMENT] ✅ Booking was confirmed by another process');
-                }
-              }
-            }
+          if (booking) {
+            createdBooking = booking;
+            console.log(`[PAYMENT] ✅ Booking created by webhook after ${attempt * delayMs}ms:`, booking._id);
+            break;
           }
-        } else {
-          console.log('[PAYMENT] ✅ Booking already confirmed');
+          
+          if (attempt === maxAttempts) {
+            console.error('[PAYMENT] ❌ Timeout waiting for webhook to create booking');
+            return res.status(408).json({
+              success: false,
+              error: 'Booking confirmation is taking longer than expected. Please check your email or contact support with payment reference: ' + paymentIntent.id
+            });
+          }
         }
 
         bookingResult = {
           success: true,
-          data: confirmedBooking,
-          bookingIds: [confirmedBooking._id]
+          data: createdBooking,
+          bookingIds: [createdBooking._id]
         };
-        // NOTE: Status update and confirmation email are primarily handled by the Stripe webhook.
-        // confirm-payment polls for webhook completion, with fallback confirmation if webhook is slow.
       }
 
       if (bookingResult.success) {
