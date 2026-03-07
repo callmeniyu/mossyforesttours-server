@@ -271,9 +271,9 @@ class BookingService {
       if (booking) {
         console.log(`✅ Booking ${booking._id} marked confirmed via Stripe event`);
 
-        // NOTE: Email sending is handled by the confirmPayment endpoint, not here
-        // This avoids duplicate emails and ensures emails are sent even if webhook fires first
-        console.log(`📧 Email will be sent by confirmPayment endpoint for booking ${booking._id}`);
+        // NOTE: Email sending is handled by the Stripe webhook handler (stripeWebhook.controller.ts).
+        // The confirm-payment endpoint is read-only and does NOT send emails.
+        console.log(`📧 Confirmation email will be sent by webhook handler for booking ${booking._id}`);
       } else {
         console.log(`⚠️ No booking found to update for payment intent: ${opts.paymentIntentId}`);
       }
