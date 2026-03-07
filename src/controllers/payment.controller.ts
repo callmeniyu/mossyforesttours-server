@@ -506,8 +506,12 @@ export class PaymentController {
         console.log('[PAYMENT] Single booking - finding existing booking...');
         
         // Look for booking with either pending OR succeeded status (webhook may have already updated)
+        // Check both paymentIntentId and stripePaymentIntentId to handle bookings created by webhook
         const existingBooking = await Booking.findOne({
-          'paymentInfo.paymentIntentId': paymentIntent.id
+          $or: [
+            { 'paymentInfo.paymentIntentId': paymentIntent.id },
+            { 'paymentInfo.stripePaymentIntentId': paymentIntent.id }
+          ]
         });
 
         if (existingBooking) {
@@ -515,45 +519,20 @@ export class PaymentController {
           
           if (wasAlreadyConfirmed) {
             console.log('[PAYMENT] Booking already confirmed by webhook:', existingBooking._id);
+            console.log('[PAYMENT] ✅ No action needed - webhook already processed this payment');
           } else {
-            // Update existing booking payment status AND update slot counts
+            // Update existing booking payment status - slot already reserved when booking was created
             existingBooking.paymentInfo.paymentStatus = 'succeeded';
             existingBooking.paymentInfo.paymentMethod = 'stripe';
+            // Ensure both field names are set for consistency
+            if (paymentIntent.id) {
+              existingBooking.paymentInfo.paymentIntentId = paymentIntent.id;
+              existingBooking.paymentInfo.stripePaymentIntentId = paymentIntent.id;
+            }
             const savedBooking = await existingBooking.save();
 
-            console.log('[PAYMENT] Updated existing booking:', savedBooking._id);
-
-            // Update slot counts for existing booking (now that payment is confirmed)
-            try {
-              const { TimeSlotService } = require('../services/timeSlot.service');
-              const totalGuests = (existingBooking.adults || 0) + (existingBooking.children || 0);
-              
-              // Convert booking date to YYYY-MM-DD Malaysia timezone for timeslot lookup
-              let dateStr = existingBooking.date;
-              if (existingBooking.date instanceof Date) {
-                dateStr = existingBooking.date.toISOString().split('T')[0];
-              } else if (typeof existingBooking.date === 'string' && existingBooking.date.includes('T')) {
-                dateStr = existingBooking.date.split('T')[0];
-              } else if (typeof existingBooking.date === 'string') {
-                const bookingDate = new Date(existingBooking.date);
-                dateStr = bookingDate.toISOString().split('T')[0];
-              }
-              dateStr = TimeSlotService.formatDateToMalaysiaTimezone(dateStr);
-              
-              console.log(`[PAYMENT] Converting booking date: ${existingBooking.date} → ${dateStr}`);
-              
-              await TimeSlotService.updateSlotBooking(
-                existingBooking.packageType,
-                existingBooking.packageId,
-                dateStr,
-                existingBooking.time,
-                totalGuests,
-                'add'
-              );
-              console.log('[PAYMENT] ✅ Updated slot for single booking:', savedBooking._id);
-            } catch (slotError) {
-              console.error('[PAYMENT] ❌ Failed to update slot for single booking:', slotError);
-            }
+            console.log('[PAYMENT] Updated existing booking payment status:', savedBooking._id);
+            console.log('[PAYMENT] ⚠️ Slot already reserved when booking was created - NOT updating slot count again');
           }
 
           bookingResult = {
@@ -562,59 +541,54 @@ export class PaymentController {
             bookingIds: [existingBooking._id]
           };
         } else {
-          // No existing booking found, create new one
-          const finalBookingData = {
-            ...bookingData,
-            paymentInfo: {
-              paymentIntentId: paymentIntent.id,
-              amount: paymentIntent.amount / 100,
-              currency: paymentIntent.currency,
-              paymentStatus: 'succeeded',
-              paymentMethod: 'stripe',
-              bankCharge: Math.round((paymentIntent.amount / 100) * 0.028 * 100) / 100
-            }
-          };
+          // No existing booking found - this means webhook hasn't fired yet
+          // Create booking using atomic reservation to prevent double bookings
+          console.log('[PAYMENT] ⚠️ No existing booking found - webhook may not have fired yet');
+          console.log('[PAYMENT] Creating booking with atomic slot reservation...');
 
-          const booking = new Booking(finalBookingData);
-          const savedBooking = await booking.save();
-
-          // Update slot counts for new booking created after payment
+          const BookingService = require('../services/booking.service').default;
+          
           try {
-            const { TimeSlotService } = require('../services/timeSlot.service');
-            const totalGuests = (bookingData.adults || 0) + (bookingData.children || 0);
-            
-            // Convert booking date to YYYY-MM-DD Malaysia timezone for timeslot lookup
-            let dateStr = bookingData.date;
-            if (bookingData.date instanceof Date) {
-              dateStr = bookingData.date.toISOString().split('T')[0];
-            } else if (typeof bookingData.date === 'string' && bookingData.date.includes('T')) {
-              dateStr = bookingData.date.split('T')[0];
-            } else if (typeof bookingData.date === 'string') {
-              const bookingDate = new Date(bookingData.date);
-              dateStr = bookingDate.toISOString().split('T')[0];
-            }
-            dateStr = TimeSlotService.formatDateToMalaysiaTimezone(dateStr);
-            
-            console.log(`[PAYMENT] Converting booking date: ${bookingData.date} → ${dateStr}`);
-            
-            await TimeSlotService.updateSlotBooking(
-              bookingData.packageType,
-              bookingData.packageId,
-              dateStr,
-              bookingData.time,
-              totalGuests,
-              'add'
-            );
-            console.log('[PAYMENT] ✅ Slot updated for new booking created after payment');
-          } catch (slotError) {
-            console.error('[PAYMENT] ❌ Failed to update slot for new booking:', slotError);
-          }
+            const savedBooking = await BookingService.createBookingDirect({
+              packageType: bookingData.packageType,
+              packageId: new mongoose.Types.ObjectId(bookingData.packageId),
+              date: new Date(bookingData.date),
+              time: bookingData.time,
+              adults: bookingData.adults || 1,
+              children: bookingData.children || 0,
+              pickupLocation: bookingData.pickupLocation || '',
+              contactInfo: {
+                name: bookingData.contactInfo?.name || '',
+                email: bookingData.contactInfo?.email || '',
+                phone: bookingData.contactInfo?.phone || '',
+                whatsapp: bookingData.contactInfo?.whatsapp || ''
+              },
+              subtotal: paymentIntent.amount / 100,
+              total: paymentIntent.amount / 100,
+              paymentInfo: {
+                paymentIntentId: paymentIntent.id,
+                stripePaymentIntentId: paymentIntent.id,
+                amount: paymentIntent.amount / 100,
+                bankCharge: Math.round((paymentIntent.amount / 100) * 0.028 * 100) / 100,
+                currency: paymentIntent.currency,
+                paymentStatus: 'succeeded',
+                paymentMethod: 'stripe'
+              },
+              isVehicleBooking: bookingData.isVehicleBooking || false,
+              vehicleSeatCapacity: bookingData.vehicleSeatCapacity
+            });
 
-          bookingResult = {
-            success: true,
-            data: savedBooking,
-            bookingIds: [savedBooking._id]
-          };
+            console.log('[PAYMENT] ✅ Booking created with atomic slot reservation:', savedBooking._id);
+
+            bookingResult = {
+              success: true,
+              data: savedBooking,
+              bookingIds: [savedBooking._id]
+            };
+          } catch (createError: any) {
+            console.error('[PAYMENT] ❌ Failed to create booking:', createError);
+            throw new Error(`Failed to create booking: ${createError.message}`);
+          }
         }
 
         // Send single booking confirmation email after payment success
