@@ -584,12 +584,12 @@ export class PaymentController {
         console.log('[PAYMENT] Found booking:', existingBooking._id, '— current status:', existingBooking.paymentInfo?.paymentStatus);
 
         // Wait for webhook to confirm the booking (it handles status update + email)
-        // Poll for up to 10 seconds for webhook to complete
+        // Poll for up to 15 seconds for webhook to complete
         let confirmedBooking = existingBooking;
         if (existingBooking.paymentInfo?.paymentStatus !== 'succeeded') {
           console.log('[PAYMENT] Waiting for webhook to confirm booking...');
           
-          const maxAttempts = 20; // 10 seconds total
+          const maxAttempts = 30; // 15 seconds total
           const delayMs = 500; // Check every 500ms
           
           for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -603,12 +603,109 @@ export class PaymentController {
             }
             
             if (attempt === maxAttempts) {
-              console.error('[PAYMENT] ⚠️ Timeout waiting for webhook — booking still pending');
-              return res.status(408).json({
-                success: false,
-                error: 'Payment processing timeout. Your booking is being confirmed. Please check your email or contact support.',
-                bookingId: existingBooking._id
-              });
+              // Webhook didn't fire in time — confirm manually as fallback
+              console.log('[PAYMENT] ⚠️ Webhook timeout — confirming booking manually as fallback');
+              
+              const manuallyConfirmed = await Booking.findOneAndUpdate(
+                {
+                  _id: existingBooking._id,
+                  'paymentInfo.paymentStatus': { $ne: 'succeeded' }
+                },
+                {
+                  $set: {
+                    status: 'confirmed',
+                    'paymentInfo.paymentStatus': 'succeeded',
+                    'paymentInfo.paymentMethod': 'stripe',
+                    'paymentInfo.updatedAt': new Date()
+                  }
+                },
+                { new: true }
+              );
+              
+              if (manuallyConfirmed) {
+                confirmedBooking = manuallyConfirmed;
+                console.log('[PAYMENT] ✅ Booking manually confirmed (webhook was slow)');
+                
+                // Send confirmation email as fallback (webhook might not have sent it)
+                if (!confirmedBooking.confirmationEmailSent) {
+                  try {
+                    console.log('[PAYMENT] Sending confirmation email (fallback)...');
+                    
+                    // Get package details for email
+                    let packageDetails: any = null;
+                    if (confirmedBooking.packageType === 'tour') {
+                      const mongoose = require('mongoose');
+                      const TourModel = mongoose.model('Tour');
+                      packageDetails = await TourModel.findById(confirmedBooking.packageId);
+                    } else if (confirmedBooking.packageType === 'transfer') {
+                      const mongoose = require('mongoose');
+                      const TransferModel = mongoose.model('Transfer');
+                      packageDetails = await TransferModel.findById(confirmedBooking.packageId);
+                    }
+                    
+                    const emailData: any = {
+                      customerName: confirmedBooking.contactInfo?.name,
+                      customerEmail: confirmedBooking.contactInfo?.email,
+                      bookingId: confirmedBooking._id.toString(),
+                      packageId: confirmedBooking.packageId,
+                      packageName: packageDetails?.title || (confirmedBooking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service'),
+                      packageType: confirmedBooking.packageType,
+                      date: confirmedBooking.date,
+                      time: confirmedBooking.time,
+                      adults: confirmedBooking.adults,
+                      children: confirmedBooking.children || 0,
+                      pickupLocation: confirmedBooking.pickupLocation,
+                      total: confirmedBooking.total,
+                      currency: confirmedBooking.paymentInfo?.currency || 'MYR'
+                    };
+                    
+                    // Add transfer-specific details
+                    if (confirmedBooking.packageType === 'transfer' && packageDetails) {
+                      emailData.from = packageDetails.from;
+                      emailData.to = packageDetails.to;
+                      if (packageDetails.type === 'Private') {
+                        emailData.isVehicleBooking = true;
+                        emailData.vehicleName = packageDetails.vehicle;
+                        emailData.vehicleSeatCapacity = packageDetails.seatCapacity;
+                      }
+                    }
+                    
+                    // Add vehicle information for private tours
+                    if (confirmedBooking.packageType === 'tour' && packageDetails && packageDetails.type === 'private') {
+                      emailData.isVehicleBooking = true;
+                      emailData.vehicleName = packageDetails.vehicle;
+                      emailData.vehicleSeatCapacity = packageDetails.seatCapacity;
+                    }
+                    
+                    // Add pickup guidelines
+                    if (packageDetails?.details?.pickupGuidelines) {
+                      emailData.pickupGuidelines = packageDetails.details.pickupGuidelines;
+                    } else if (confirmedBooking.packageType === 'transfer' && (packageDetails?.details as any)?.pickupDescription) {
+                      emailData.pickupGuidelines = (packageDetails.details as any).pickupDescription;
+                    }
+                    
+                    const emailService = new EmailService();
+                    const emailSent = await emailService.sendBookingConfirmation(emailData);
+                    
+                    if (emailSent) {
+                      await Booking.findByIdAndUpdate(confirmedBooking._id, {
+                        $set: { confirmationEmailSent: true, confirmationEmailSentAt: new Date() }
+                      });
+                      console.log('[PAYMENT] ✅ Confirmation email sent (fallback)');
+                    }
+                  } catch (emailError) {
+                    console.error('[PAYMENT] ❌ Failed to send fallback email:', emailError);
+                    // Don't fail the response — booking is confirmed
+                  }
+                }
+              } else {
+                // Another process already confirmed it
+                const finalBooking = await Booking.findById(existingBooking._id);
+                if (finalBooking) {
+                  confirmedBooking = finalBooking;
+                  console.log('[PAYMENT] ✅ Booking was confirmed by another process');
+                }
+              }
             }
           }
         } else {
@@ -620,8 +717,8 @@ export class PaymentController {
           data: confirmedBooking,
           bookingIds: [confirmedBooking._id]
         };
-        // NOTE: Status update and confirmation email are handled exclusively by the Stripe webhook.
-        // confirm-payment polls until webhook completes, then returns the confirmed booking.
+        // NOTE: Status update and confirmation email are primarily handled by the Stripe webhook.
+        // confirm-payment polls for webhook completion, with fallback confirmation if webhook is slow.
       }
 
       if (bookingResult.success) {
