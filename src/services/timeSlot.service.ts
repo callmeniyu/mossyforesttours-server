@@ -92,6 +92,7 @@ export class TimeSlotService {
 
     /**
      * Check availability for a specific package, date, and time
+     * NOTE: This is now a READ-ONLY check. Use checkAndReserveSlot for atomic reservation.
      */
     static async checkAvailability(
         packageType: "tour" | "transfer",
@@ -190,6 +191,158 @@ export class TimeSlotService {
             }
         } catch (error) {
             console.error("Error checking availability:", error)
+            throw error
+        }
+    }
+
+    /**
+     * Atomically check availability AND reserve the slot in one operation
+     * This prevents race conditions by using MongoDB's findOneAndUpdate
+     */
+    static async checkAndReserveSlot(
+        packageType: "tour" | "transfer",
+        packageId: Types.ObjectId,
+        date: string,
+        time: string,
+        requestedPersons: number
+    ): Promise<{
+        success: boolean
+        reason?: string
+        newMinimumPerson?: number
+    }> {
+        try {
+            // Check if booking is within 10 hours of departure time
+            const isBookingAllowed = this.isBookingAllowed(date, time)
+            if (!isBookingAllowed) {
+                return {
+                    success: false,
+                    reason: "Booking closed - less than 10 hours before departure"
+                }
+            }
+
+            // Get package details to check if it's private
+            let packageDoc: any = null
+            if (packageType === "tour") {
+                packageDoc = await Tour.findById(packageId)
+            } else {
+                packageDoc = await Transfer.findById(packageId)
+            }
+
+            if (!packageDoc) {
+                return {
+                    success: false,
+                    reason: "Package not found"
+                }
+            }
+
+            const isPrivate = packageDoc.type === "private" || packageDoc.type === "Private"
+
+            console.log(`🔒 ATOMIC RESERVATION ATTEMPT: ${packageType}/${packageId} - Date: ${date}, Time: ${time}, Persons: ${requestedPersons}, IsPrivate: ${isPrivate}`);
+
+            // ATOMIC OPERATION: Find the slot and update it only if conditions are met
+            // This prevents the race condition by locking the document during the update
+            const timeSlot = await TimeSlot.findOne({
+                packageType,
+                packageId,
+                date
+            })
+
+            if (!timeSlot) {
+                return {
+                    success: false,
+                    reason: "No time slots available for this date"
+                }
+            }
+
+            // Find slot index
+            const slotIndex = timeSlot.slots.findIndex((s: any) => s.time === time)
+            if (slotIndex === -1) {
+                return {
+                    success: false,
+                    reason: "Requested time slot not available"
+                }
+            }
+
+            const slot = timeSlot.slots[slotIndex]
+            const currentBookedCount = slot.bookedCount
+            const currentMinimumPerson = slot.minimumPerson
+            const availableSlots = slot.capacity - currentBookedCount
+            const isFirstBooking = currentBookedCount === 0
+
+            console.log(`📊 Current State - BookedCount: ${currentBookedCount}, MinimumPerson: ${currentMinimumPerson}, Available: ${availableSlots}, Capacity: ${slot.capacity}`);
+
+            // Check minimum person requirement
+            let requiredMinimum: number
+            if (isPrivate) {
+                requiredMinimum = 1
+            } else {
+                requiredMinimum = currentMinimumPerson
+            }
+
+            if (requestedPersons < requiredMinimum) {
+                const bookingType = isPrivate ? "private" : (isFirstBooking ? "first" : "subsequent")
+                return {
+                    success: false,
+                    reason: `Minimum ${requiredMinimum} person${requiredMinimum > 1 ? 's' : ''} required for this ${bookingType} booking`
+                }
+            }
+
+            // Check capacity
+            if (availableSlots < requestedPersons) {
+                return {
+                    success: false,
+                    reason: "Not enough slots available"
+                }
+            }
+
+            // Calculate new values
+            const newBookedCount = currentBookedCount + requestedPersons
+            let newMinimumPerson = currentMinimumPerson
+
+            // Update minimumPerson for first booking on non-private packages
+            if (isFirstBooking && !isPrivate) {
+                newMinimumPerson = 1
+                console.log(`🚀 FIRST BOOKING! Setting minimumPerson from ${currentMinimumPerson} to 1`);
+            }
+
+            // ATOMIC UPDATE: Use MongoDB's atomic operators with conditions
+            // The $set operator within findOneAndUpdate ensures this happens atomically
+            const updateQuery = {
+                packageType,
+                packageId,
+                date,
+                [`slots.${slotIndex}.bookedCount`]: currentBookedCount, // Ensure count hasn't changed
+            }
+
+            const updateOperation = {
+                $set: {
+                    [`slots.${slotIndex}.bookedCount`]: newBookedCount,
+                    [`slots.${slotIndex}.minimumPerson`]: newMinimumPerson,
+                }
+            }
+
+            const result = await TimeSlot.findOneAndUpdate(
+                updateQuery,
+                updateOperation,
+                { new: true }
+            )
+
+            if (!result) {
+                console.log(`⚠️ ATOMIC RESERVATION FAILED - Slot was modified by another request`);
+                return {
+                    success: false,
+                    reason: "Slot was just booked by another request, please try again"
+                }
+            }
+
+            console.log(`✅ ATOMIC RESERVATION SUCCESS - New BookedCount: ${newBookedCount}, New MinimumPerson: ${newMinimumPerson}`);
+
+            return {
+                success: true,
+                newMinimumPerson
+            }
+        } catch (error) {
+            console.error("Error in atomic slot reservation:", error)
             throw error
         }
     }

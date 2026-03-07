@@ -133,6 +133,28 @@ export class CartBookingService {
           console.log(`   - Pickup Location: "${item.pickupLocation || ''}"`);
           console.log(`   - Total Price: ${item.totalPrice}`);
 
+          // ATOMIC OPERATION: Reserve slot first to prevent race conditions
+          const totalGuests = item.adults + item.children;
+          const isPrivate = packageDoc && (packageDoc.type === 'Private' || packageDoc.type === 'private');
+          const requestedPersons = (isPrivate && item.packageType === 'transfer') ? 1 : totalGuests;
+
+          console.log(`🔒 [CART] Attempting atomic slot reservation for ${item.packageTitle}...`);
+          const reservation = await TimeSlotService.checkAndReserveSlot(
+            item.packageType,
+            item.packageId,
+            TimeSlotService.formatDateToMalaysiaTimezone(new Date(item.selectedDate).toISOString().split('T')[0]),
+            item.selectedTime,
+            requestedPersons
+          );
+
+          if (!reservation.success) {
+            console.log(`❌ [CART] Slot reservation failed for ${item.packageTitle}:`, reservation.reason);
+            result.warnings.push(`${item.packageTitle}: ${reservation.reason || 'Time slot not available'}`);
+            continue; // Skip this item and continue with next
+          }
+
+          console.log(`✅ [CART] Slot reserved atomically for ${item.packageTitle}`);
+
           const bookingData = {
             userId: user._id,
             packageType: item.packageType,
@@ -171,39 +193,43 @@ export class CartBookingService {
 
           console.log(`📝 Booking data to save:`, JSON.stringify(bookingData, null, 2));
 
-          const booking = new Booking(bookingData);
+          let savedBooking;
+          try {
+            const booking = new Booking(bookingData);
 
-          // Validate the booking before saving
-          const validationError = booking.validateSync();
-          if (validationError) {
-            console.error(`❌ Booking validation failed for ${item.packageTitle}:`, validationError.message);
-            throw new Error(`Validation failed: ${validationError.message}`);
+            // Validate the booking before saving
+            const validationError = booking.validateSync();
+            if (validationError) {
+              console.error(`❌ Booking validation failed for ${item.packageTitle}:`, validationError.message);
+              throw new Error(`Validation failed: ${validationError.message}`);
+            }
+
+            savedBooking = await booking.save({ session });
+            console.log(`✅ Successfully saved booking ${savedBooking._id} for ${item.packageTitle}`);
+            result.bookings.push(savedBooking._id.toString());
+          } catch (bookingError: any) {
+            // Rollback slot reservation if booking creation fails
+            console.error(`❌ [CART] Booking creation failed for ${item.packageTitle}, rolling back slot...`);
+            try {
+              await TimeSlotService.updateSlotBooking(
+                item.packageType,
+                item.packageId,
+                TimeSlotService.formatDateToMalaysiaTimezone(new Date(item.selectedDate).toISOString().split('T')[0]),
+                item.selectedTime,
+                requestedPersons,
+                "subtract"
+              );
+              console.log(`✅ [CART] Slot reservation rolled back for ${item.packageTitle}`);
+            } catch (rollbackError) {
+              console.error(`❌ [CART] CRITICAL: Failed to rollback slot for ${item.packageTitle}:`, rollbackError);
+            }
+            throw bookingError; // Re-throw to be caught by outer try-catch
           }
 
-          const savedBooking = await booking.save({ session });
-          console.log(`✅ Successfully saved booking ${savedBooking._id} for ${item.packageTitle}`);
-          result.bookings.push(savedBooking._id.toString());
-
-          // Update slot booking count using TimeSlotService
-          const totalGuests = item.adults + item.children;
+          // Update package bookedCount (slot count already updated atomically above)
           try {
-            // For private transfers, booking is per-vehicle: update slot by 1 vehicle booking
             if (item.packageType === 'transfer') {
-              const pkg = packageDoc as any;
-              const isPrivate = pkg && (pkg.type === 'Private' || pkg.type === 'private');
               if (isPrivate) {
-                // Use 1 as the increment for vehicle booking and pass seatCapacity as personsCount for internal checks
-                const seatCap = pkg.seatCapacity || pkg.maximumPerson || 1;
-                await TimeSlotService.updateSlotBooking(
-                  item.packageType,
-                  item.packageId,
-                  TimeSlotService.formatDateToMalaysiaTimezone(new Date(item.selectedDate).toISOString().split('T')[0]),
-                  item.selectedTime,
-                  1, // one vehicle
-                  "add"
-                );
-                console.log(`✅ Updated slot booking count by 1 vehicle for ${item.packageTitle}`);
-
                 // Update package bookedCount by 1 (vehicle count)
                 await Transfer.findByIdAndUpdate(
                   item.packageId,
@@ -212,16 +238,6 @@ export class CartBookingService {
                 );
                 console.log(`✅ Updated Transfer bookedCount by 1 for package ${item.packageId}`);
               } else {
-                await TimeSlotService.updateSlotBooking(
-                  item.packageType,
-                  item.packageId,
-                  TimeSlotService.formatDateToMalaysiaTimezone(new Date(item.selectedDate).toISOString().split('T')[0]),
-                  item.selectedTime,
-                  totalGuests,
-                  "add"
-                );
-                console.log(`✅ Updated slot booking count by ${totalGuests} for ${item.packageTitle}`);
-
                 // Update package bookedCount by totalGuests for non-private transfers
                 await Transfer.findByIdAndUpdate(
                   item.packageId,
@@ -231,17 +247,7 @@ export class CartBookingService {
                 console.log(`✅ Updated Transfer bookedCount by ${totalGuests} for package ${item.packageId}`);
               }
             } else {
-              // Tours: update by total guests
-              await TimeSlotService.updateSlotBooking(
-                item.packageType,
-                item.packageId,
-                TimeSlotService.formatDateToMalaysiaTimezone(new Date(item.selectedDate).toISOString().split('T')[0]),
-                item.selectedTime,
-                totalGuests,
-                "add"
-              );
-              console.log(`✅ Updated slot booking count by ${totalGuests} for ${item.packageTitle}`);
-
+              // Tours: update package bookedCount by total guests
               await Tour.findByIdAndUpdate(
                 item.packageId,
                 { $inc: { bookedCount: totalGuests } },
@@ -249,9 +255,9 @@ export class CartBookingService {
               );
               console.log(`✅ Updated Tour bookedCount by ${totalGuests} for package ${item.packageId}`);
             }
-          } catch (slotError: any) {
-            console.error(`⚠️ Failed to update slot booking count for ${item.packageTitle}:`, slotError.message);
-            result.warnings.push(`Slot booking count could not be updated for ${item.packageTitle}`);
+          } catch (packageError: any) {
+            console.error(`⚠️ Failed to update package bookedCount for ${item.packageTitle}:`, packageError.message);
+            result.warnings.push(`Package booked count could not be updated for ${item.packageTitle}`);
           }
 
           // Send confirmation email for this booking

@@ -130,7 +130,6 @@ class BookingService {
 
       const totalGuests = data.adults + data.children;
 
-      // Check slot availability using TimeSlotService (includes minimum person validation)
       // For vehicle bookings, requestedPersons should be treated as 1 (one vehicle)
       const requestedPersons = data.isVehicleBooking ? 1 : totalGuests;
       // Ensure we use Malaysia-local date string for slot lookups (avoid UTC shift)
@@ -138,7 +137,10 @@ class BookingService {
         formatDateToYYYYMMDD(data.date)
       );
 
-      const availability = await TimeSlotService.checkAvailability(
+      // ATOMIC OPERATION: Reserve the slot atomically to prevent race conditions
+      // This replaces the separate check-then-update pattern with a single atomic operation
+      console.log('[BOOKING_SERVICE] 🔒 Attempting atomic slot reservation...');
+      const reservation = await TimeSlotService.checkAndReserveSlot(
         data.packageType,
         data.packageId,
         slotDateStr,
@@ -146,54 +148,70 @@ class BookingService {
         requestedPersons
       );
 
-      if (!availability.available) {
-        throw new Error(availability.reason || "Time slot not available");
+      if (!reservation.success) {
+        console.log('[BOOKING_SERVICE] ❌ Slot reservation failed:', reservation.reason);
+        throw new Error(reservation.reason || "Time slot not available");
       }
 
-      // Create booking with userId (if found/created) and slotId (for guest bookings using dynamic slots)
-      const booking = new BookingModel({
-        userId: userId, // Link to user if found/created
-        packageType: data.packageType,
-        packageId: data.packageId,
-        slotId: null, // No specific slot for guest bookings using dynamic slots
-        date: data.date,
-        time: data.time,
-        adults: data.adults,
-        children: data.children,
-        pickupLocation: data.pickupLocation,
-        status: data.paymentInfo.paymentStatus === 'succeeded' ? 'confirmed' : 'pending', // Auto-confirm if payment succeeded
-        contactInfo: data.contactInfo,
-        // Persist paymentInfo and any Stripe identifiers so webhooks can reconcile
-        paymentInfo: {
-          ...data.paymentInfo,
-          stripePaymentIntentId: (data.paymentInfo as any)?.stripePaymentIntentId || null,
-          stripeSessionId: (data.paymentInfo as any)?.stripeSessionId || null,
-        },
-        subtotal: data.subtotal,
-        total: data.total,
-        firstBookingMinimum: false, // Can be calculated based on business logic
-        isVehicleBooking: data.isVehicleBooking || false,
-        vehicleSeatCapacity: data.vehicleSeatCapacity
-      });
+      console.log('[BOOKING_SERVICE] ✅ Slot reserved atomically');
 
-      const savedBooking = await booking.save();
-      console.log('[BOOKING_SERVICE] ✅ Booking saved to database with ID:', savedBooking._id);
+      // Now create the booking - the slot is already reserved
+      // If this fails, we need to rollback the slot reservation
+      let savedBooking;
+      try {
+        const booking = new BookingModel({
+          userId: userId, // Link to user if found/created
+          packageType: data.packageType,
+          packageId: data.packageId,
+          slotId: null, // No specific slot for guest bookings using dynamic slots
+          date: data.date,
+          time: data.time,
+          adults: data.adults,
+          children: data.children,
+          pickupLocation: data.pickupLocation,
+          status: data.paymentInfo.paymentStatus === 'succeeded' ? 'confirmed' : 'pending', // Auto-confirm if payment succeeded
+          contactInfo: data.contactInfo,
+          // Persist paymentInfo and any Stripe identifiers so webhooks can reconcile
+          paymentInfo: {
+            ...data.paymentInfo,
+            stripePaymentIntentId: (data.paymentInfo as any)?.stripePaymentIntentId || null,
+            stripeSessionId: (data.paymentInfo as any)?.stripeSessionId || null,
+          },
+          subtotal: data.subtotal,
+          total: data.total,
+          firstBookingMinimum: false, // Can be calculated based on business logic
+          isVehicleBooking: data.isVehicleBooking || false,
+          vehicleSeatCapacity: data.vehicleSeatCapacity
+        });
 
-      // Update slot booking count using TimeSlotService and package bookedCount
+        savedBooking = await booking.save();
+        console.log('[BOOKING_SERVICE] ✅ Booking saved to database with ID:', savedBooking._id);
+      } catch (bookingError) {
+        // Rollback the slot reservation if booking creation fails
+        console.error('[BOOKING_SERVICE] ❌ Booking creation failed, rolling back slot reservation...');
+        try {
+          await TimeSlotService.updateSlotBooking(
+            data.packageType,
+            data.packageId,
+            slotDateStr,
+            data.time,
+            requestedPersons,
+            "subtract"
+          );
+          console.log('[BOOKING_SERVICE] ✅ Slot reservation rolled back successfully');
+        } catch (rollbackError) {
+          console.error('[BOOKING_SERVICE] ❌ CRITICAL: Failed to rollback slot reservation:', rollbackError);
+        }
+        throw bookingError;
+      }
+
+      // Update package bookedCount (slot count already updated atomically above)
       const PackageModel = data.packageType === 'tour' ? mongoose.model('Tour') : mongoose.model('Transfer');
       const pkg = await PackageModel.findById(data.packageId);
       const isPrivate = pkg && (pkg.type === 'Private' || pkg.type === 'private');
 
       if (isPrivate && data.packageType === 'transfer') {
         // For private transfers, treat as one vehicle booking
-        await TimeSlotService.updateSlotBooking(
-          data.packageType,
-          data.packageId,
-          slotDateStr,
-          data.time,
-          1, // one vehicle
-          "add"
-        );
         const TransferModel = mongoose.model('Transfer');
         await TransferModel.findByIdAndUpdate(
           data.packageId,
@@ -202,14 +220,6 @@ class BookingService {
         console.log(`✅ Updated Transfer bookedCount by 1 for package ${data.packageId}`);
       } else {
         // Non-private: update by total guests
-        await TimeSlotService.updateSlotBooking(
-          data.packageType,
-          data.packageId,
-          slotDateStr,
-          data.time,
-          totalGuests,
-          "add"
-        );
         if (data.packageType === 'tour') {
           const TourModel = mongoose.model('Tour');
           await TourModel.findByIdAndUpdate(
