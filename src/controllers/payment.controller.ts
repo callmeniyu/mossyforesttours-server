@@ -2,7 +2,8 @@
 const Stripe = require('stripe');
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import { EmailService } from '../services/email.service';
+const EmailService: any = require('../services/email.service').default;
+const BookingService: any = require('../services/booking.service').default;
 // TimeSlotService used to update timeslot bookedCount; import once to avoid redeclaration
 const { TimeSlotService } = require('../services/timeSlot.service');
 
@@ -504,18 +505,20 @@ export class PaymentController {
         }
 
       } else {
-        // Handle single booking - poll for webhook to create the booking
+        // Handle single booking - ONLY webhook creates bookings (best practice)
+        // This endpoint just polls for webhook completion
         console.log('[PAYMENT] Single booking - waiting for webhook to create booking...');
+        console.log('[PAYMENT] Payment intent ID:', paymentIntent.id);
         
-        let createdBooking: any = null;
-        const maxAttempts = 30; // 15 seconds total
-        const delayMs = 500; // Check every 500ms
+        let booking = null;
+        const maxAttempts = 100; // 20 seconds total (100 × 200ms)
+        const delayMs = 200; // Check every 200ms for fast response
         
         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
           await new Promise(resolve => setTimeout(resolve, delayMs));
           
-          // Look for booking created by webhook
-          const booking = await Booking.findOne({
+          // Poll for booking created by webhook
+          booking = await Booking.findOne({
             $or: [
               { 'paymentInfo.paymentIntentId': paymentIntent.id },
               { 'paymentInfo.stripePaymentIntentId': paymentIntent.id }
@@ -523,24 +526,37 @@ export class PaymentController {
           });
           
           if (booking) {
-            createdBooking = booking;
-            console.log(`[PAYMENT] ✅ Booking created by webhook after ${attempt * delayMs}ms:`, booking._id);
+            console.log(`[PAYMENT] ✅ Booking found after ${attempt * delayMs}ms:`, booking._id);
             break;
           }
           
-          if (attempt === maxAttempts) {
-            console.error('[PAYMENT] ❌ Timeout waiting for webhook to create booking');
-            return res.status(408).json({
-              success: false,
-              error: 'Booking confirmation is taking longer than expected. Please check your email or contact support with payment reference: ' + paymentIntent.id
-            });
+          // Log progress every 2 seconds
+          if (attempt % 10 === 0) {
+            console.log(`[PAYMENT] Still waiting for webhook... (${attempt * delayMs}ms)`);
           }
         }
-
+        
+        // If booking not found after polling, return success with instructions
+        // Webhook will eventually create it (Stripe retries webhooks automatically)
+        if (!booking) {
+          console.log('[PAYMENT] ⏱️ Webhook taking longer than expected, but payment succeeded');
+          console.log('[PAYMENT] Booking will be created when webhook fires (Stripe retries automatically)');
+          
+          return res.json({
+            success: true,
+            delayed: true,
+            message: 'Payment successful! Your booking is being confirmed. You will receive a confirmation email shortly.',
+            data: {
+              paymentIntentId: paymentIntent.id,
+              paymentStatus: 'succeeded'
+            }
+          });
+        }
+        
         bookingResult = {
           success: true,
-          data: createdBooking,
-          bookingIds: [createdBooking._id]
+          data: booking,
+          bookingIds: [booking._id]
         };
       }
 

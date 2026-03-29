@@ -1,4 +1,5 @@
 import mongoose from "mongoose"
+import dns from "node:dns"
 import { env } from "./env"
 
 // Cache connection for serverless functions
@@ -10,7 +11,26 @@ let cached: {
     promise: null
 };
 
+// Workaround for environments where default DNS blocks SRV lookups (MongoDB Atlas)
+const configureMongoDns = () => {
+    try {
+        const shouldUsePublicDns = env.MONGO_URI.startsWith('mongodb+srv://');
+        if (!shouldUsePublicDns) return;
+
+        const configuredServers = process.env.MONGO_DNS_SERVERS
+            ? process.env.MONGO_DNS_SERVERS.split(',').map(s => s.trim()).filter(Boolean)
+            : ['8.8.8.8', '1.1.1.1'];
+
+        dns.setServers(configuredServers);
+        console.log(`MongoDB DNS servers set to: ${configuredServers.join(', ')}`);
+    } catch (error) {
+        console.warn('Failed to set custom DNS servers for MongoDB:', error);
+    }
+};
+
 const connectDB = async () => {
+    configureMongoDns();
+
     // If already connected, return cached connection
     if (cached.conn) {
         console.log('Using cached MongoDB connection');
@@ -37,10 +57,19 @@ const connectDB = async () => {
             dbName: 'cameronhighlandstours', // Explicitly specify database name
         }
 
-        // Add database name to URI if not present
-        const connectionUri = env.MONGO_URI.includes('/?') 
+        // Add database name only when URI has no db path yet
+        // Cases:
+        // 1) mongodb+srv://.../?x=1 -> inject /cameronhighlandstours
+        // 2) mongodb+srv://... (or mongodb://... with no path) -> append /cameronhighlandstours
+        // 3) mongodb://.../existingDb?... -> keep as-is
+        const hasNoDbButHasQuery = /\/\?/.test(env.MONGO_URI);
+        const hasNoPathAtAll = /^mongodb(?:\+srv)?:\/\/[^/]+$/.test(env.MONGO_URI);
+
+        const connectionUri = hasNoDbButHasQuery
             ? env.MONGO_URI.replace('/?', '/cameronhighlandstours?')
-            : env.MONGO_URI + '/cameronhighlandstours'
+            : hasNoPathAtAll
+                ? `${env.MONGO_URI}/cameronhighlandstours`
+                : env.MONGO_URI
 
         console.log('Connecting to MongoDB...');
         

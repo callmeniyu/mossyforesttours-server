@@ -909,4 +909,176 @@ export class TimeSlotService {
             throw error
         }
     }
+
+    /**
+     * Toggle availability for slots in a date range
+     */
+    static async toggleSlotsRangeAvailability(
+        packageType: "tour" | "transfer",
+        packageId: Types.ObjectId,
+        startDate: string,
+        endDate: string,
+        times: string[],
+        isAvailable: boolean
+    ): Promise<number> {
+        try {
+            console.log(`🔄 Toggling slots range: ${packageType} ${packageId}, ${startDate} to ${endDate}, times: ${times.join(', ')}, available: ${isAvailable}`)
+            
+            // Find all time slots in the date range
+            const timeSlots = await TimeSlot.find({
+                packageType,
+                packageId,
+                date: { $gte: startDate, $lte: endDate }
+            })
+
+            let updatedCount = 0
+            for (const doc of timeSlots) {
+                let docModified = false
+                
+                // If times is empty, toggle all slots for those dates
+                if (times.length === 0) {
+                    doc.slots.forEach(slot => {
+                        if (slot.isAvailable !== isAvailable) {
+                            slot.isAvailable = isAvailable
+                            docModified = true
+                        }
+                    })
+                } else {
+                    // Toggle only specified times
+                    doc.slots.forEach(slot => {
+                        if (times.includes(slot.time) && slot.isAvailable !== isAvailable) {
+                            slot.isAvailable = isAvailable
+                            docModified = true
+                        }
+                    })
+                }
+
+                if (docModified) {
+                    await doc.save()
+                    updatedCount++
+                }
+            }
+
+            return updatedCount
+        } catch (error) {
+            console.error("Error toggling slots range availability:", error)
+            throw error
+        }
+    }
+
+    /**
+     * Update slots for 90 days from tomorrow when critical fields change
+     * This is called when admin changes minimumPerson, capacity, or times
+     * Updates all future timeslots from tomorrow for the next 90 days
+     */
+    static async updateSlotsFor90DaysFromTomorrow(
+        packageType: "tour" | "transfer",
+        packageId: Types.ObjectId,
+        newTimes: string[],
+        newCapacity: number,
+        newMinimumPerson: number
+    ): Promise<void> {
+        try {
+            console.log(`🔄 Updating slots for 90 days from tomorrow for ${packageType} ${packageId}`)
+            console.log(`   New times: ${newTimes.join(', ')}`)
+            console.log(`   New capacity: ${newCapacity}`)
+            console.log(`   New minimumPerson: ${newMinimumPerson}`)
+
+            // Get tomorrow's date in Malaysia timezone
+            const today = new Date()
+            const tomorrow = new Date(today)
+            tomorrow.setDate(tomorrow.getDate() + 1)
+            const tomorrowStr = this.formatDateToMYT(tomorrow)
+            
+            // Calculate end date (90 days from tomorrow)
+            const endDate = new Date(tomorrow)
+            endDate.setDate(endDate.getDate() + 90)
+            const endDateStr = this.formatDateToMYT(endDate)
+
+            console.log(`   Date range: ${tomorrowStr} to ${endDateStr}`)
+
+            // Find all existing time slots from tomorrow for 90 days
+            const existingSlots = await TimeSlot.find({
+                packageType,
+                packageId,
+                date: { $gte: tomorrowStr, $lte: endDateStr }
+            })
+
+            console.log(`   Found ${existingSlots.length} existing time slots to update`)
+
+            // Update each existing slot
+            for (const slot of existingSlots) {
+                const updatedSlots = newTimes.map(time => {
+                    // Try to find existing slot data for this time
+                    const existingSlot = slot.slots.find((s: any) => s.time === time)
+                    
+                    if (existingSlot) {
+                        // Keep existing bookings but update capacity and minimumPerson
+                        // If slot has bookings, keep minimumPerson at 1, otherwise use new value
+                        const minimumPerson = existingSlot.bookedCount > 0 ? 1 : newMinimumPerson
+                        
+                        return {
+                            time,
+                            capacity: newCapacity,
+                            bookedCount: Math.min(existingSlot.bookedCount, newCapacity), // Don't exceed new capacity
+                            isAvailable: existingSlot.bookedCount < newCapacity, // Available if under capacity
+                            minimumPerson: minimumPerson
+                        }
+                    } else {
+                        // New time slot - create fresh
+                        return {
+                            time,
+                            capacity: newCapacity,
+                            bookedCount: 0,
+                            isAvailable: true,
+                            minimumPerson: newMinimumPerson
+                        }
+                    }
+                })
+
+                slot.slots = updatedSlots
+                slot.capacity = newCapacity
+                await slot.save()
+            }
+
+            // Generate any missing slots for dates that don't exist yet
+            const currentDate = new Date(tomorrow)
+            while (currentDate <= endDate) {
+                const dateStr = this.formatDateToMYT(currentDate)
+                
+                // Check if slot already exists (we might have updated it above)
+                const existingSlot = await TimeSlot.findOne({
+                    packageType,
+                    packageId,
+                    date: dateStr
+                })
+
+                if (!existingSlot) {
+                    // Create new slot for this date
+                    const slots = newTimes.map(time => ({
+                        time,
+                        capacity: newCapacity,
+                        bookedCount: 0,
+                        isAvailable: true,
+                        minimumPerson: newMinimumPerson
+                    }))
+
+                    await TimeSlot.create({
+                        packageType,
+                        packageId,
+                        date: dateStr,
+                        slots,
+                        capacity: newCapacity
+                    })
+                }
+
+                currentDate.setDate(currentDate.getDate() + 1)
+            }
+
+            console.log(`✅ Successfully updated slots for 90 days from tomorrow for ${packageType} ${packageId}`)
+        } catch (error) {
+            console.error("Error updating slots for 90 days from tomorrow:", error)
+            throw error
+        }
+    }
 }

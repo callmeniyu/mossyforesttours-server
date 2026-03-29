@@ -236,6 +236,61 @@ export const toggleSlotAvailability = async (req: Request, res: Response) => {
 }
 
 /**
+ * Toggle slots availability for a specific date range and times
+ */
+export const toggleSlotsRangeAvailability = async (req: Request, res: Response) => {
+    try {
+        const { packageType, packageId, startDate, endDate, times, isAvailable } = req.body
+
+        console.log("Toggle slots range availability request:", { packageType, packageId, startDate, endDate, times, isAvailable })
+
+        if (!packageType || !packageId || !startDate || !endDate || !Array.isArray(times) || typeof isAvailable !== 'boolean') {
+            return res.status(400).json({
+                success: false,
+                message: "Missing required fields: packageType, packageId, startDate, endDate, times, isAvailable"
+            })
+        }
+
+        if (!["tour", "transfer"].includes(packageType)) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid packageType. Must be 'tour' or 'transfer'"
+            })
+        }
+
+        // Validate packageId is a valid ObjectId string
+        if (typeof packageId !== 'string' || packageId.length !== 24) {
+            return res.status(400).json({
+                success: false,
+                message: "packageId must be a valid 24-character ObjectId string"
+            })
+        }
+
+        const updatedCount = await TimeSlotService.toggleSlotsRangeAvailability(
+            packageType as "tour" | "transfer",
+            new Types.ObjectId(packageId),
+            startDate,
+            endDate,
+            times,
+            isAvailable
+        )
+
+        res.json({
+            success: true,
+            message: `Successfully ${isAvailable ? 'enabled' : 'disabled'} slots in range`,
+            data: { updatedCount }
+        })
+    } catch (error: any) {
+        console.error("Error toggling slots range availability:", error)
+        res.status(500).json({
+            success: false,
+            message: "Internal server error",
+            error: error.message
+        })
+    }
+}
+
+/**
  * Update slot booking count
  */
 export const updateSlotBooking = async (req: Request, res: Response) => {

@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from "mongoose";
 
 export interface PaymentInfo {
+  // Stripe fields (existing)
   paymentIntentId?: string;
   paymentStatus: 'pending' | 'processing' | 'succeeded' | 'failed';
   amount: number;
@@ -9,6 +10,21 @@ export interface PaymentInfo {
   paymentMethod?: string;
   refundStatus?: 'none' | 'partial' | 'full';
   refundAmount?: number;
+  
+  // CommercePay fields
+  paymentGateway?: 'stripe' | 'commercepay';
+  commercePayReferenceCode?: string;
+  commercePaySessionId?: string;
+  commercePayTransactionNumber?: string;
+  paymentChannel?: string;
+  paymentInitiatedAt?: Date;
+  paymentCompletedAt?: Date;
+  verifiedAt?: Date;
+  failureReason?: string;
+  failedAt?: Date;
+  pendingAt?: Date;
+  cancellationReason?: string;
+  cancelledAt?: Date;
 }
 
 export interface ContactInfo {
@@ -29,6 +45,7 @@ export interface Booking extends Document {
   children: number;
   pickupLocation: string;
   status: "pending" | "confirmed" | "cancelled" | "completed";
+  bookingStatus?: "pending" | "confirmed" | "cancelled" | "completed"; // Alternative naming
   firstBookingMinimum: boolean;
   contactInfo: ContactInfo;
   paymentInfo: PaymentInfo;
@@ -43,6 +60,18 @@ export interface Booking extends Document {
   confirmationEmailSentAt?: Date;
   reviewEmailSent?: boolean;
   reviewEmailSentAt?: Date;
+  // Additional fields
+  bookingReference?: string;
+  packageName?: string;
+  customerName?: string;
+  customerEmail?: string;
+  totalPrice?: number;
+  bookingDate?: Date;
+  selectedTimeSlot?: mongoose.Types.ObjectId;
+  timeSlots?: Array<{
+    _id: mongoose.Types.ObjectId;
+    bookingCount: number;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -82,7 +111,25 @@ const BookingSchema: Schema = new Schema(
         enum: ['none', 'partial', 'full'],
         default: 'none'
       },
-      refundAmount: Number
+      refundAmount: Number,
+      // CommercePay fields
+      paymentGateway: {
+        type: String,
+        enum: ['stripe', 'commercepay'],
+        default: 'stripe'
+      },
+      commercePayReferenceCode: String,
+      commercePaySessionId: String,
+      commercePayTransactionNumber: String,
+      paymentChannel: String,
+      paymentInitiatedAt: Date,
+      paymentCompletedAt: Date,
+      verifiedAt: Date,
+      failureReason: String,
+      failedAt: Date,
+      pendingAt: Date,
+      cancellationReason: String,
+      cancelledAt: Date,
     },
     subtotal: { type: Number, required: true },
     total: { type: Number, required: true },
@@ -91,6 +138,18 @@ const BookingSchema: Schema = new Schema(
   isVehicleBooking: { type: Boolean, default: false },
   vehicleSeatCapacity: { type: Number },
   seatsRequested: { type: Number },
+    // Additional fields for CommercePay integration
+    bookingReference: String,
+    packageName: String,
+    customerName: String,
+    customerEmail: String,
+    totalPrice: Number,
+    bookingDate: Date,
+    selectedTimeSlot: Schema.Types.ObjectId,
+    timeSlots: [{
+      _id: Schema.Types.ObjectId,
+      bookingCount: { type: Number, default: 0 }
+    }],
     confirmationEmailSent: { type: Boolean, default: false },
     confirmationEmailSentAt: { type: Date },
     reviewEmailSent: { type: Boolean, default: false },
@@ -105,9 +164,13 @@ BookingSchema.index({ packageId: 1, date: 1 });
 BookingSchema.index({ slotId: 1 });
 BookingSchema.index({ status: 1, date: 1 });
 BookingSchema.index({ 'paymentInfo.paymentStatus': 1 });
-BookingSchema.index({ 'paymentInfo.paymentIntentId': 1 }, { unique: true, sparse: true }); // Prevent duplicate payments
+BookingSchema.index({ 'paymentInfo.paymentIntentId': 1 }, { unique: true, sparse: true }); // Prevent duplicate payments (Stripe)
+BookingSchema.index({ 'paymentInfo.commercePayReferenceCode': 1 }, { unique: true, sparse: true }); // Prevent duplicate payments (CommercePay)
+BookingSchema.index({ 'paymentInfo.commercePayTransactionNumber': 1 }, { sparse: true }); // Query by transaction
+BookingSchema.index({ 'paymentInfo.paymentGateway': 1, 'paymentInfo.paymentStatus': 1 }); // Query by gateway and status
 BookingSchema.index({ createdAt: -1 });
 BookingSchema.index({ reviewEmailSent: 1, date: 1 }); // For review email scheduler
+BookingSchema.index({ bookingReference: 1 }, { sparse: true }); // Query by booking reference
 
 const BookingModel = mongoose.models.Booking ? (mongoose.models.Booking as mongoose.Model<Booking>) : mongoose.model<Booking>("Booking", BookingSchema);
 export default BookingModel;

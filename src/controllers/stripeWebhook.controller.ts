@@ -9,7 +9,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', { apiVersion: '20
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
 
 // Helper function to create booking from payment intent metadata
-async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Promise<any> {
+// This is exported so confirmPayment can also use it for immediate booking creation
+export async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Promise<any> {
   try {
     const metadata = intent.metadata;
 
@@ -83,6 +84,7 @@ async function createBookingFromPaymentIntent(intent: Stripe.PaymentIntent): Pro
         bankCharge,
         currency,
         paymentStatus: 'succeeded',
+        paymentIntentId: intent.id, // For query compatibility
         stripePaymentIntentId: intent.id,
         paymentMethod: 'stripe'
       },

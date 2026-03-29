@@ -22,6 +22,7 @@ import reviewRoutes from "./routes/review.routes"
 import currencyRoutes from "./routes/currency.routes"
 import failedWebhookRoutes from "./routes/failedWebhook.routes"
 import { PaymentCleanupService } from "./services/paymentCleanup.service"
+import createCommercePayRoutes from "./routes/commercepayPayment.routes"
 
 const app = express()
 
@@ -92,6 +93,8 @@ app.use("/api/vehicles", vehicleRoutes)
 app.use("/api/rolling-timeslots", rollingTimeslotRoutes)
 // Payment processing
 app.use("/api/payments", paymentRoutes)
+// CommercePay integration
+app.use("/api/payment/commercepay", createCommercePayRoutes())
 // Payment debugging
 app.use("/api/payment-debug", paymentDebugRoutes)
 // Review and rating system

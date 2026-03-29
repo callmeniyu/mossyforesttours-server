@@ -16,6 +16,12 @@ const envSchema = z.object({
     CLOUDINARY_API_SECRET: z.string(),
     STRIPE_SECRET_KEY: z.string().optional(), // Optional for now to avoid breaking existing setup
     STRIPE_WEBHOOK_SECRET: z.string().optional(), // Optional for now
+    COMMERCEPAY_MERCHANT_ID: z.string().optional(),
+    COMMERCEPAY_USERNAME: z.string().optional(),
+    COMMERCEPAY_PASSWORD: z.string().optional(),
+    COMMERCEPAY_SECRET_KEY: z.string().optional(),
+    COMMERCEPAY_API_KEY: z.string().optional(),
+    COMMERCEPAY_API_BASE_URL: z.string().optional(),
 })
 
 // Parse and validate environment variables

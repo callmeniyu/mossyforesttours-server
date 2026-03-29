@@ -405,28 +405,47 @@ class BookingService {
     // Copy all filter properties to query
     Object.assign(query, filter);
 
-    // NOTE: Removed automatic markPastBookingsCompleted() call from here
-    // It was causing severe performance issues by running on every page load
-    // This should be handled by a scheduled cron job instead
-
-    // Populate packageId based on packageType
+    // Get bookings first - use .lean() for performance
     const bookings = await BookingModel.find(query)
       .sort({ createdAt: -1 })
+      .lean()
       .exec();
 
-    // Manually populate packageId for each booking based on packageType
-    const populatedBookings = await Promise.all(
-      bookings.map(async (booking) => {
-        if (booking.packageType === 'tour') {
-          return BookingModel.populate(booking, { path: 'packageId', model: 'Tour' });
-        } else if (booking.packageType === 'transfer') {
-          return BookingModel.populate(booking, { path: 'packageId', model: 'Transfer' });
-        }
-        return booking;
-      })
-    );
+    if (bookings.length === 0) return [];
 
-    return populatedBookings;
+    // Group packageIds by type to avoid N+1 queries
+    const tourIds = bookings
+      .filter(b => b.packageType === "tour")
+      .map(b => b.packageId);
+    
+    const transferIds = bookings
+      .filter(b => b.packageType === "transfer")
+      .map(b => b.packageId);
+
+    // Batch fetch tour and transfer details
+    const TourModel = mongoose.model("Tour");
+    const TransferModel = mongoose.model("Transfer");
+
+    const [tours, transfers] = await Promise.all([
+      tourIds.length > 0 ? TourModel.find({ _id: { $in: tourIds } }).lean().exec() : Promise.resolve([]),
+      transferIds.length > 0 ? TransferModel.find({ _id: { $in: transferIds } }).lean().exec() : Promise.resolve([])
+    ]);
+
+    // Create maps for quick lookup
+    const tourMap = new Map(tours.map((t: any) => [t._id.toString(), t]));
+    const transferMap = new Map(transfers.map((t: any) => [t._id.toString(), t]));
+
+    // Map package details back to bookings
+    const populatedBookings = bookings.map((booking: any) => {
+      if (booking.packageType === "tour") {
+        booking.packageId = tourMap.get(booking.packageId.toString()) || booking.packageId;
+      } else if (booking.packageType === "transfer") {
+        booking.packageId = transferMap.get(booking.packageId.toString()) || booking.packageId;
+      }
+      return booking;
+    });
+
+    return populatedBookings as any[];
   }
 
   // Get bookings with full package details
@@ -436,68 +455,94 @@ class BookingService {
     // Copy all filter properties to query
     Object.assign(query, filter);
 
-    // NOTE: Removed automatic markPastBookingsCompleted() call from here
-    // It was causing severe performance issues by running on every page load
-    // This should be handled by a scheduled cron job instead
-
-    // Get bookings first
+    // Get bookings first - use .lean() for performance
     const bookings = await BookingModel.find(query)
       .sort({ createdAt: -1 })
+      .lean()
       .exec();
 
-    // Manually populate packageId for each booking and format for frontend
-    const bookingsWithDetails = await Promise.all(
-      bookings.map(async (booking) => {
-        let packageDetails = null;
+    if (bookings.length === 0) return [];
 
-        if (booking.packageType === 'tour') {
-          const TourModel = mongoose.model('Tour');
-          packageDetails = await TourModel.findById(booking.packageId).select('title image price duration slug');
-        } else if (booking.packageType === 'transfer') {
-          const TransferModel = mongoose.model('Transfer');
-          packageDetails = await TransferModel.findById(booking.packageId).select('title image price duration vehicle slug');
-        }
+    // Group packageIds by type to avoid N+1 queries
+    const tourIds = bookings
+      .filter(b => b.packageType === "tour")
+      .map(b => b.packageId);
+    
+    const transferIds = bookings
+      .filter(b => b.packageType === "transfer")
+      .map(b => b.packageId);
 
-        return {
-          _id: booking._id,
-          packageType: booking.packageType,
-          packageId: booking.packageId,
-          date: booking.date,
-          time: booking.time,
-          adults: booking.adults,
-          children: booking.children,
-          pickupLocation: booking.pickupLocation,
-          total: booking.total,
-          status: booking.status,
-          createdAt: booking.createdAt,
-          contactInfo: booking.contactInfo,
-          packageDetails: packageDetails ? {
-            title: packageDetails.title,
-            image: packageDetails.image,
-            price: packageDetails.price,
-            duration: packageDetails.duration,
-            slug: packageDetails.slug,
-            vehicle: packageDetails.vehicle // for transfers
-          } : null
-        };
-      })
-    );
+    // Batch fetch tour and transfer details
+    const TourModel = mongoose.model("Tour");
+    const TransferModel = mongoose.model("Transfer");
+
+    const [tours, transfers] = await Promise.all([
+      tourIds.length > 0 
+        ? TourModel.find({ _id: { $in: tourIds } }).select("title image price duration slug").lean().exec() 
+        : Promise.resolve([]),
+      transferIds.length > 0 
+        ? TransferModel.find({ _id: { $in: transferIds } }).select("title image price duration vehicle slug").lean().exec() 
+        : Promise.resolve([])
+    ]);
+
+    // Create maps for quick lookup
+    const tourMap = new Map(tours.map((t: any) => [t._id.toString(), t]));
+    const transferMap = new Map(transfers.map((t: any) => [t._id.toString(), t]));
+
+    // Map package details back to bookings and format for frontend
+    const bookingsWithDetails = bookings.map((booking: any) => {
+      let packageDetails = null;
+
+      if (booking.packageType === "tour") {
+        packageDetails = tourMap.get(booking.packageId.toString());
+      } else if (booking.packageType === "transfer") {
+        packageDetails = transferMap.get(booking.packageId.toString());
+      }
+
+      return {
+        _id: booking._id,
+        packageType: booking.packageType,
+        packageId: booking.packageId,
+        date: booking.date,
+        time: booking.time,
+        adults: booking.adults,
+        children: booking.children,
+        pickupLocation: booking.pickupLocation,
+        total: booking.total,
+        status: booking.status,
+        createdAt: booking.createdAt,
+        contactInfo: booking.contactInfo,
+        packageDetails: packageDetails ? {
+          title: packageDetails.title,
+          image: packageDetails.image,
+          price: packageDetails.price,
+          duration: packageDetails.duration,
+          slug: packageDetails.slug,
+          vehicle: packageDetails.vehicle // for transfers
+        } : null
+      };
+    });
 
     return bookingsWithDetails;
   }
 
   // Get booking by ID
   async getBookingById(id: string): Promise<Booking | null> {
-    const booking = await BookingModel.findById(id).exec();
+    const booking = await BookingModel.findById(id).lean().exec();
     if (!booking) return null;
 
     // Populate packageId based on packageType
+    const TourModel = mongoose.model('Tour');
+    const TransferModel = mongoose.model('Transfer');
+
     if (booking.packageType === 'tour') {
-      return BookingModel.populate(booking, { path: 'packageId', model: 'Tour' });
+      const packageDetails = await TourModel.findById(booking.packageId).lean().exec();
+      (booking as any).packageId = packageDetails || booking.packageId;
     } else if (booking.packageType === 'transfer') {
-      return BookingModel.populate(booking, { path: 'packageId', model: 'Transfer' });
+      const packageDetails = await TransferModel.findById(booking.packageId).lean().exec();
+      (booking as any).packageId = packageDetails || booking.packageId;
     }
-    return booking;
+    return booking as any;
   }
 
   // Update booking (no cancellation support)

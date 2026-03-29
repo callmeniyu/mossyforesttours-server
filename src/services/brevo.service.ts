@@ -588,7 +588,7 @@ export class BrevoEmailService {
           </div>
           <div class="booking-footer">
             <div class="paid">Paid online</div>
-            <div class="total">${booking.currency} ${booking.total.toFixed(2)}</div>
+            <div class="total">${booking.currency.toUpperCase()} ${booking.total.toFixed(2)}</div>
           </div>
         </div>
 

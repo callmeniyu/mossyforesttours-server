@@ -10,6 +10,7 @@ import {
     debugTimeSlots,
     getServerDateTime,
     toggleSlotAvailability,
+    toggleSlotsRangeAvailability,
     updateSlotMinimumPerson
 } from "../controllers/timeSlot.controller"
 
@@ -26,6 +27,9 @@ router.get("/available", getAvailableSlots)
 
 // Toggle slot availability (enable/disable specific time slot)
 router.put("/toggle-availability", toggleSlotAvailability)
+
+// Toggle multiple slots availability in a date range
+router.put("/toggle-range-availability", toggleSlotsRangeAvailability)
 
 // Update minimum person for a specific time slot
 router.put("/minimum-person", updateSlotMinimumPerson)

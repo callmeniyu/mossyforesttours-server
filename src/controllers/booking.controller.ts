@@ -94,8 +94,12 @@ class BookingController {
 
       // Send confirmation email to customer
       try {
-        const emailData = {
-          customerName: contactInfo.name,
+        // Skip sending email for pending CommercePay bookings - let the webhook/callback handle it
+        if (paymentInfo?.paymentStatus === "pending" && paymentInfo?.paymentGateway === "commercepay") {
+          console.log('[BOOKING_CONTROLLER] Skipping email for pending CommercePay booking');
+        } else {
+          const emailData = {
+            customerName: contactInfo.name,
           customerEmail: contactInfo.email,
           bookingId: (booking as any)._id.toString(),
           packageId: packageId,
@@ -139,8 +143,9 @@ class BookingController {
           (emailData as any).pickupGuidelines = (packageDetails.details as any).pickupDescription;
         }
 
-        await EmailService.sendBookingConfirmation(emailData);
-        console.log(`Confirmation email sent to ${contactInfo.email}`);
+          await EmailService.sendBookingConfirmation(emailData);
+          console.log(`Confirmation email sent to ${contactInfo.email}`);
+        }
       } catch (emailError: any) {
         console.error("Failed to send confirmation email:", emailError.message);
         // Don't fail the booking creation if email fails
@@ -225,9 +230,14 @@ class BookingController {
 
       const bookings = await BookingService.getBookings(filter);
       console.log(`[BOOKING QUERY] Found ${bookings.length} bookings with filter:`, JSON.stringify(filter.date || 'no date filter'));
+      
+      // If a limit is provided, apply it (though service already fetched all)
+      const limit = req.query.limit ? parseInt(req.query.limit as string) : 0;
+      const resultBookings = limit > 0 ? bookings.slice(0, limit) : bookings;
+
       res.json({
         success: true,
-        bookings: bookings
+        bookings: resultBookings
       });
     } catch (error: any) {
       res.status(400).json({ 
