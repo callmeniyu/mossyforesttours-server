@@ -23,6 +23,63 @@ export interface CommercePayConfig {
 }
 
 /**
+ * Normalize the CommercePay API base URL for payment requests (PaymentGateway endpoints).
+ * Accepts values like:
+ * - https://payments.commerce.asia/api/services/app
+ * - https://payments.commerce.asia/api
+ * - https://payments.commerce.asia/api/TokenAuth/Authenticate
+ */
+export function normalizeCommercePayApiBaseUrl(rawUrl: string): string {
+  let url = String(rawUrl || '').trim();
+  if (!url) {
+    throw new Error('Invalid CommercePay API base URL');
+  }
+
+  // Remove trailing slash
+  url = url.replace(/\/+$/, '');
+
+  // If the auth endpoint is passed, strip it to base
+  url = url.replace(/\/TokenAuth\/Authenticate$/i, '');
+
+  // Normalize to service app base path for non-token calls
+  if (url.match(/\/api\/services\/app$/i)) {
+    return url;
+  }
+
+  if (url.match(/\/api$/i)) {
+    return url.replace(/\/api$/i, '/api/services/app');
+  }
+
+  // Keep as-is if already looks good
+  return url;
+}
+
+/**
+ * Normalize CommercePay auth base URL for TokenAuth operations.
+ */
+export function normalizeCommercePayAuthBaseUrl(rawUrl: string): string {
+  let url = String(rawUrl || '').trim();
+  if (!url) {
+    throw new Error('Invalid CommercePay API base URL');
+  }
+
+  url = url.replace(/\/+$/, '');
+  url = url.replace(/\/TokenAuth\/Authenticate$/i, '');
+
+  if (url.match(/\/api\/services\/app$/i)) {
+    return url.replace(/\/api\/services\/app$/i, '/api');
+  }
+
+  if (!url.match(/\/api$/i)) {
+    // If not ending with /api, assume this is host and append api
+    url = url.replace(/\/+$/, '');
+    url += '/api';
+  }
+
+  return url;
+}
+
+/**
  * Payment request data interface
  */
 export interface PaymentRequestData {
@@ -116,19 +173,115 @@ class PaymentLogger {
  * @param secretKey - Secret key for signing
  * @returns Base64-encoded signature
  */
-export function generateCommercePaySignature(payload: any, secretKey: string): string {
-  if (!secretKey || typeof secretKey !== 'string') {
+
+export function cleanCommercePayPayload(obj: any): any {
+  if (obj === null || obj === undefined || obj === "") {
+    return undefined;
+  }
+
+  if (Array.isArray(obj)) {
+    return obj
+      .map((item) => cleanCommercePayPayload(item))
+      .filter((item) => item !== undefined);
+  }
+
+  if (typeof obj === 'object') {
+    const cleaned = Object.keys(obj)
+      .reduce((acc: any, key) => {
+        const cleanedValue = cleanCommercePayPayload(obj[key]);
+        if (cleanedValue !== undefined) {
+          acc[key] = cleanedValue;
+        }
+        return acc;
+      }, {});
+
+    return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+  }
+
+  return obj;
+}
+
+export function sortCommercePayPayload(payload: any): any {
+  const cleanedPayload = cleanCommercePayPayload(payload);
+
+  const stringifyAndSort = (obj: any): any => {
+    if (obj === null || obj === undefined || obj === "") return undefined;
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => stringifyAndSort(item));
+    }
+
+    if (typeof obj === 'object') {
+      return Object.keys(obj)
+        .sort()
+        .reduce((sorted: any, key) => {
+          if (obj[key] !== null && obj[key] !== undefined && obj[key] !== "") {
+            sorted[key] = stringifyAndSort(obj[key]);
+          }
+          return sorted;
+        }, {});
+    }
+
+    return obj;
+  };
+
+  return stringifyAndSort(cleanedPayload);
+}
+
+export function generateCommercePaySignature(payload: any, secretKey: string, endpointUrl: string = ''): string {
+  const cleanSecretKey = String(secretKey || '').trim().replace(/^['"]|['"]$/g, '');
+  
+  if (!cleanSecretKey) {
     throw new Error('Invalid secret key provided');
   }
 
-  // Create a stable string representation of the payload
-  const sortedKeys = Object.keys(payload).sort();
-  const signatureString = sortedKeys.map((key) => `${key}=${payload[key]}`).join('&');
+  // Deep clone and process payload 
+  // 1. Remove properties with null/undefined/"" values
+  // 2. Sort object keys recursively for signature string
+  const stringifyAndSort = (obj: any): any => {
+    if (obj === null || obj === undefined || obj === "") return undefined;
+    
+    if (Array.isArray(obj)) {
+      return obj.map(item => stringifyAndSort(item));
+    }
+    
+    if (typeof obj === 'object') {
+      return Object.keys(obj)
+        .sort()
+        .reduce((sorted: any, key) => {
+          if (obj[key] !== null && obj[key] !== undefined && obj[key] !== "") {
+            sorted[key] = stringifyAndSort(obj[key]);
+          }
+          return sorted;
+        }, {});
+    }
+    return obj;
+  };
 
-  // Generate HMAC-SHA256
-  const hmac = crypto.createHmac('sha256', secretKey);
-  hmac.update(signatureString);
-  const signature = hmac.digest('base64');
+  const processedPayload = sortCommercePayPayload(payload);
+
+  // Convert payload to JSON string
+  const jsonString = JSON.stringify(processedPayload);
+
+  // Combine URL (without trailing slash and queries) and JSON string
+  const baseUrl = endpointUrl.split('?')[0].replace(/\/$/, '');
+  const combinedString = baseUrl + jsonString;
+
+  // CommercePay docs require lower-casing the URL+JSON string before hashing.
+  const lowercasedString = combinedString.toLowerCase();
+  const stringToHash = lowercasedString;
+  
+  console.log('CommercePay Signature Debug:');
+  console.log('Base URL:', baseUrl);
+  console.log('JSON String:', jsonString);
+  console.log('Combined:', combinedString);
+  console.log('Lowercased (hash payload):', lowercasedString);
+  console.log('String being hashed:', stringToHash);
+
+  const hmac = crypto.createHmac('sha256', cleanSecretKey);
+  hmac.update(stringToHash);
+  const signature = hmac.digest('hex');
+  console.log('CommercePay Signature:', signature);
 
   return signature;
 }
@@ -140,14 +293,14 @@ export function generateCommercePaySignature(payload: any, secretKey: string): s
  * @param secretKey - Secret key for verification
  * @returns true if signature is valid
  */
-export function verifyCommercePaySignature(payload: any, signature: string, secretKey: string): boolean {
+export function verifyCommercePaySignature(payload: any, signature: string, secretKey: string, endpointUrl: string = ''): boolean {
   if (!signature || !secretKey) {
     PaymentLogger.log('warn', 'Missing signature or secret key for verification');
     return false;
   }
 
   try {
-    const expectedSignature = generateCommercePaySignature(payload, secretKey);
+    const expectedSignature = generateCommercePaySignature(payload, secretKey, endpointUrl);
     const isValid = crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
     return isValid;
   } catch (error) {
@@ -184,8 +337,11 @@ export async function getAccessToken(config: CommercePayConfig): Promise<string>
   try {
     PaymentLogger.log('info', 'Requesting new access token from CommercePay');
 
-    const baseUrlWithApi = config.apiBaseUrl.replace(/\/api\/services\/app\/?$/, '') + '/api';
-    
+    const authBaseUrl = normalizeCommercePayAuthBaseUrl(config.apiBaseUrl || process.env.COMMERCEPAY_API_BASE_URL || '');
+    const baseUrlWithApi = authBaseUrl.replace(/\/+$/, '');
+
+    PaymentLogger.log('debug', 'CommercePay auth base URL', { authBaseUrl, baseUrlWithApi });
+
     // Check global process.env directly if config fields are missing
     const rawUsername = config.username || process.env.COMMERCEPAY_USERNAME || config.merchantId;
     const finalUsername = String(rawUsername).trim().replace(/^['"]|['"]$/g, '');
@@ -265,8 +421,8 @@ export async function getAccessToken(config: CommercePayConfig): Promise<string>
         PaymentLogger.log('debug', `CRITICAL_DEBUG: Attempting auth at ${attempt.url}`, { 
           fullUrl: attempt.url,
           headers: {
-            'Abp-TenantId': attempt.headers?.['Abp-TenantId'],
-            'Content-Type': 'application/json'
+            'Abp-TenantId': 1129,
+            'Content-Type': 'application/json',
           },
           body_REDACTED: { 
             userNameOrEmailAddress: attempt.body.userNameOrEmailAddress,
@@ -292,9 +448,18 @@ export async function getAccessToken(config: CommercePayConfig): Promise<string>
         });
 
         // Check if response is successful (2xx status)
-        if (response.status >= 200 && response.status < 300) {
+        const tokenFromResponse = response.data?.result?.accessToken || response.data?.result?.token;
+        if (response.status >= 200 && response.status < 300 && tokenFromResponse) {
           PaymentLogger.log('debug', `Auth successful at ${attempt.url}`, { status: response.status });
+          response.data = { ...response.data, result: { ...response.data.result, accessToken: tokenFromResponse } };
           break;
+        } else if (response.status >= 200 && response.status < 300) {
+          PaymentLogger.log('debug', `Auth attempt returned 2xx but no token: ${attempt.url}`, {
+            status: response.status,
+            data: response.data,
+          });
+          lastError = new Error(`HTTP ${response.status}: No access token in response (data=${JSON.stringify(response.data)})`);
+          continue; // try next attempt
         } else {
           PaymentLogger.log('debug', `Auth attempt failed: ${attempt.url}`, {
             status: response.status,
@@ -428,6 +593,31 @@ export function validateUrl(url: string): boolean {
  * @param paymentData - Payment data
  * @returns Validated payment request payload
  */
+export function validateTimestamp(timestamp: string | number): boolean {
+  if (timestamp === undefined || timestamp === null || timestamp === '') {
+    PaymentLogger.log('warn', 'Missing timestamp in payment payload');
+    return false;
+  }
+
+  const numeric = typeof timestamp === 'string' ? Number(timestamp) : timestamp;
+  if (Number.isNaN(numeric) || typeof numeric !== 'number') {
+    PaymentLogger.log('warn', 'Invalid timestamp format', { timestamp });
+    return false;
+  }
+
+  const now = Date.now();
+  // Handle both seconds and milliseconds (if length is < 13, probably seconds)
+  const isSeconds = numeric < 20000000000;
+  const numericMs = isSeconds ? numeric * 1000 : numeric;
+  const drift = Math.abs(now - numericMs);
+  if (drift > 5 * 60 * 1000) {
+    PaymentLogger.log('warn', 'Timestamp drift too large', { timestamp, drift });
+    return false;
+  }
+
+  return true;
+}
+
 export function buildPaymentRequestPayload(paymentData: PaymentRequestData): PaymentRequestData {
   // Validate all required fields
   if (!validatePaymentAmount(paymentData.amount)) {
@@ -442,6 +632,26 @@ export function buildPaymentRequestPayload(paymentData: PaymentRequestData): Pay
     throw new Error('Invalid reference code format');
   }
 
+  const rawTimestamp = paymentData.timestamp ?? Date.now();
+  let numericTimestamp: number;
+
+  const candidate = typeof rawTimestamp === 'string' ? Number(Date.parse(rawTimestamp)) : Number(rawTimestamp);
+
+  if (Number.isNaN(candidate) || typeof candidate !== 'number') {
+    throw new Error('Invalid timestamp format');
+  }
+
+  // API docs require milliseconds. If seconds detected, convert to ms.
+  numericTimestamp = candidate < 1000000000000 ? candidate * 1000 : candidate;
+
+  if (Number.isNaN(numericTimestamp) || typeof numericTimestamp !== 'number') {
+    throw new Error('Invalid timestamp format');
+  }
+
+  if (!validateTimestamp(numericTimestamp)) {
+    throw new Error('Invalid timestamp');
+  }
+
   if (!validateUrl(paymentData.returnUrl)) {
     throw new Error('Invalid return URL');
   }
@@ -450,13 +660,30 @@ export function buildPaymentRequestPayload(paymentData: PaymentRequestData): Pay
     throw new Error('Invalid callback URL');
   }
 
-  // Build clean payload
-  const payload: PaymentRequestData = {
-    amount: paymentData.amount,
+  // Build clean payload according to CommercePay expected fields
+  const customer: any = {};
+  if (paymentData.customerEmail?.trim()) {
+    customer.email = paymentData.customerEmail.trim();
+  }
+  if (paymentData.customerName?.trim()) {
+    customer.name = paymentData.customerName.trim();
+  }
+  if (paymentData.customerMobileNo?.trim()) {
+    customer.mobileNo = paymentData.customerMobileNo.trim();
+  }
+
+  const payload: any = {
     currencyCode: paymentData.currencyCode,
+    amount: paymentData.amount,
     referenceCode: paymentData.referenceCode,
-    returnUrl: paymentData.returnUrl,
-    callbackUrl: paymentData.callbackUrl,
+    description: (paymentData.description || 'Tour payment').trim(),
+    ipAddress: (paymentData.ipAddress || '127.0.0.1').trim(),
+    userAgent: (paymentData.userAgent || 'Node.js CommercePay Client').trim(),
+    returnUrl: paymentData.returnUrl.trim(),
+    callbackUrl: paymentData.callbackUrl.trim(),
+    savePayment: false,
+    ...(Object.keys(customer).length > 0 ? { customer } : {}),
+    timestamp: numericTimestamp,
   };
 
   // Add optional fields if provided
@@ -464,17 +691,9 @@ export function buildPaymentRequestPayload(paymentData: PaymentRequestData): Pay
     payload.description = paymentData.description.substring(0, 200); // Limit to 200 chars
   }
 
-  if (paymentData.customerName) {
-    payload.customerName = paymentData.customerName.substring(0, 100); // Limit to 100 chars
-  }
+  // Do not duplicate customer info as top-level fields; use nested customer object only
+  // (reduces signature mismatch risk with CommercePay's expected payload format)
 
-  if (paymentData.customerEmail && isValidEmail(paymentData.customerEmail)) {
-    payload.customerEmail = paymentData.customerEmail;
-  }
-
-  if (paymentData.invoiceNumber) {
-    payload.invoiceNumber = paymentData.invoiceNumber.substring(0, 50); // Limit to 50 chars
-  }
 
   return payload;
 }
@@ -573,8 +792,12 @@ export function logPaymentOperation(
  * @returns Configured axios instance
  */
 export function createCommercePayAxiosInstance(config: CommercePayConfig, accessToken: string) {
+  const normalizedBaseUrl = normalizeCommercePayApiBaseUrl(config.apiBaseUrl);
+
+  PaymentLogger.log('debug', 'CommercePay request base URL', { normalizedBaseUrl });
+
   return axios.create({
-    baseURL: config.apiBaseUrl,
+    baseURL: normalizedBaseUrl,
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${accessToken}`,
@@ -606,8 +829,14 @@ export async function retryWithBackoff<T>(
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
 
-      // Don't retry on validation errors
+      // Don't retry on validation errors or client 4xx errors
       if (lastError.message.includes('Invalid')) {
+        throw lastError;
+      }
+
+      const axiosError = error as any;
+      if (axiosError?.response?.status >= 400 && axiosError?.response?.status < 500) {
+        // No retry for client errors: payload/params issue
         throw lastError;
       }
 

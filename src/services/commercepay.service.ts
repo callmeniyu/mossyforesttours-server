@@ -22,11 +22,13 @@ import {
   getAccessToken,
   invalidateTokenCache,
   buildPaymentRequestPayload,
+  sortCommercePayPayload,
   parseTransactionStatus,
   createCommercePayAxiosInstance,
   retryWithBackoff,
   generateIdempotencyKey,
   COMMERCEPAY_CONSTANTS,
+  normalizeCommercePayApiBaseUrl,
 } from '../utils/commercepay.utils';
 
 /**
@@ -125,18 +127,27 @@ export class CommercePayService {
     try {
       // Validate and build payload
       const payload = buildPaymentRequestPayload(paymentData);
+      const sortedPayload = sortCommercePayPayload(payload);
 
       // Generate signature
-      const signature = generateCommercePaySignature(payload, this.config.secretKey);
+      const endpointStr = normalizeCommercePayApiBaseUrl(this.config.apiBaseUrl) + COMMERCEPAY_CONSTANTS.API_PATHS.REQUEST_PAYMENT;
+      const signature = generateCommercePaySignature(sortedPayload, this.config.secretKey, endpointStr);
+
+      // Debug: log request payload string (avoid secrets)
+      console.debug('CommercePay RequestPayment payload string', JSON.stringify(sortedPayload));
 
       // Get authenticated axios instance
       const axiosInstance = await this.initializeAxiosInstance();
 
       // Make request with retry logic
+      // Note: we send the exact payload that was signed (cleaned + null/undefined/empty strings removed)
+      const jsonPayload = JSON.stringify(sortedPayload);
+      
       const response = await retryWithBackoff(async () => {
-        return await axiosInstance.post(COMMERCEPAY_CONSTANTS.API_PATHS.REQUEST_PAYMENT, payload, {
+        return await axiosInstance.post(COMMERCEPAY_CONSTANTS.API_PATHS.REQUEST_PAYMENT, jsonPayload, {
           headers: {
             'cap-signature': signature,
+            'Content-Type': 'application/json'
           },
         });
       });
@@ -188,7 +199,8 @@ export class CommercePayService {
       };
 
       // Generate signature
-      const signature = generateCommercePaySignature(payload, this.config.secretKey);
+      const endpointStr = normalizeCommercePayApiBaseUrl(this.config.apiBaseUrl) + COMMERCEPAY_CONSTANTS.API_PATHS.VERIFY_TRANSACTION;
+      const signature = generateCommercePaySignature(payload, this.config.secretKey, endpointStr);
 
       // Get authenticated axios instance
       const axiosInstance = await this.initializeAxiosInstance();
@@ -248,7 +260,8 @@ export class CommercePayService {
       };
 
       // Generate signature
-      const signature = generateCommercePaySignature(payload, this.config.secretKey);
+      const endpointStr = normalizeCommercePayApiBaseUrl(this.config.apiBaseUrl) + COMMERCEPAY_CONSTANTS.API_PATHS.QUERY_TRANSACTION;
+      const signature = generateCommercePaySignature(payload, this.config.secretKey, endpointStr);
 
       // Get authenticated axios instance
       const axiosInstance = await this.initializeAxiosInstance();
@@ -354,7 +367,8 @@ export class CommercePayService {
       }
 
       // Generate signature
-      const signature = generateCommercePaySignature(payload, this.config.secretKey);
+      const endpointStr = normalizeCommercePayApiBaseUrl(this.config.apiBaseUrl) + COMMERCEPAY_CONSTANTS.API_PATHS.REFUND;
+      const signature = generateCommercePaySignature(payload, this.config.secretKey, endpointStr);
 
       // Get authenticated axios instance
       const axiosInstance = await this.initializeAxiosInstance();
@@ -395,14 +409,16 @@ export class CommercePayService {
       const status = error.response?.status;
       const data = error.response?.data;
       const message = data?.message || data?.error?.message || error.message;
+      const dataJson = data ? JSON.stringify(data) : undefined;
 
       console.error(`CommercePay ${operation} failed:`, {
         status,
         message,
+        data,
         context,
       });
 
-      return new Error(`CommercePay ${operation} failed: ${message}`);
+      return new Error(`CommercePay ${operation} failed: ${message}${dataJson ? ` | details: ${dataJson}` : ''}`);
     }
 
     console.error(`CommercePay ${operation} error:`, error, context);
@@ -438,8 +454,11 @@ export class CommercePayService {
  * Factory function to create CommercePay service with environment config
  */
 export function createCommercePayService(): CommercePayService {
+  const configuredBaseUrl = process.env.COMMERCEPAY_API_BASE_URL || 'https://payments.commerce.asia/api/services/app';
+  const apiBaseUrl = normalizeCommercePayApiBaseUrl(configuredBaseUrl);
+
   const config: CommercePayConfig = {
-    apiBaseUrl: process.env.COMMERCEPAY_API_BASE_URL || 'https://payments.commerce.asia/api/services/app',
+    apiBaseUrl,
     merchantId: process.env.COMMERCEPAY_MERCHANT_ID || '',
     username: process.env.COMMERCEPAY_USERNAME || '',
     password: process.env.COMMERCEPAY_PASSWORD || '',

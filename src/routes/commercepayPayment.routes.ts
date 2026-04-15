@@ -13,7 +13,7 @@ import {
   logCommercePayRequest,
   commercePayCors,
 } from '../middleware/commercepay.middleware';
-import { CommercePayService } from '../services/commercepay.service';
+import { CommercePayService, createCommercePayService } from '../services/commercepay.service';
 import { BrevoEmailService } from '../services/brevo.service';
 
 /**
@@ -23,12 +23,7 @@ export function createCommercePayRoutes(): Router {
   const router = Router();
 
   // Initialize services
-  const commercePayService = new CommercePayService({
-    apiBaseUrl: process.env.COMMERCEPAY_API_BASE_URL || 'https://staging-payments.commerce.asia/api/services/app',
-    merchantId: process.env.COMMERCEPAY_MERCHANT_ID || '',
-    secretKey: process.env.COMMERCEPAY_SECRET_KEY || '',
-    apiKey: process.env.COMMERCEPAY_API_KEY || '',
-  });
+  const commercePayService = createCommercePayService();
 
   // Create controller
   const controller = new CommercePayPaymentController(commercePayService, BrevoEmailService);
