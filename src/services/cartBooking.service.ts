@@ -345,7 +345,7 @@ export class CartBookingService {
                 pickupLocation: cartItem?.pickupLocation || '',
                 pickupGuidelines: packageDetails?.details?.pickupGuidelines || (cartItem?.packageType === 'transfer' ? (packageDetails?.details as any)?.pickupDescription : '') || '',
                 total,
-                // Add vehicle information for private transfers
+                // Add vehicle information for private transfers and private tours
                 isVehicleBooking: cartItem?.isVehicleBooking || false,
                 vehicleName: cartItem?.vehicleName,
                 vehicleSeatCapacity: cartItem?.vehicleSeatCapacity

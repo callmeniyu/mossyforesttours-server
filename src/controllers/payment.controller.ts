@@ -432,7 +432,10 @@ export class PaymentController {
                   console.warn(`[PAYMENT] Could not fetch package details for ${booking.packageId}:`, packageError);
                 }
 
-                return {
+                // Determine if this is a private vehicle booking (private tour or private transfer with vehicle)
+              const isPrivateBooking = packageDetails?.type === 'private' || packageDetails?.type === 'Private';
+
+              return {
                   bookingId: booking._id.toString(),
                   packageId: booking.packageId,
                   packageName,
@@ -444,7 +447,11 @@ export class PaymentController {
                   pickupLocation: booking.pickupLocation,
                   pickupGuidelines,
                   total: booking.total,
-                  currency: booking.paymentInfo?.currency || 'MYR'
+                  currency: booking.paymentInfo?.currency || 'MYR',
+                  // Add vehicle information for private tours
+                  isVehicleBooking: isPrivateBooking,
+                  vehicleName: isPrivateBooking ? packageDetails?.vehicle : undefined,
+                  vehicleSeatCapacity: isPrivateBooking ? packageDetails?.seatCapacity : undefined
                 };
               })
             );

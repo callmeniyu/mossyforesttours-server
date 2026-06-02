@@ -12,6 +12,7 @@ import {
   verifyWebhookDelivery,
   logCommercePayRequest,
   commercePayCors,
+  authenticateApiKey,
 } from '../middleware/commercepay.middleware';
 import { CommercePayService, createCommercePayService } from '../services/commercepay.service';
 import { BrevoEmailService } from '../services/brevo.service';
@@ -61,6 +62,13 @@ export function createCommercePayRoutes(): Router {
    *   }
    * }
    */
+  router.get(
+    '/channels',
+    async (req, res) => {
+      await controller.getAvailableChannels(req, res);
+    }
+  );
+
   router.post(
     '/create-session',
     validatePaymentRequest,
@@ -92,7 +100,6 @@ export function createCommercePayRoutes(): Router {
    */
   router.post(
     '/callback',
-    verifyWebhookDelivery,
     async (req, res) => {
       await controller.handlePaymentCallback(req, res);
     }

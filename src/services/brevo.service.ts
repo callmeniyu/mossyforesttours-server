@@ -1,27 +1,43 @@
-import fetch from 'node-fetch';
-import { emailConfig } from '../config/email.config';
-import { BookingEmailData, CartBookingEmailData, ReviewEmailData } from './email.service';
+import fetch from "node-fetch";
+import { emailConfig } from "../config/email.config";
+import {
+  BookingEmailData,
+  CartBookingEmailData,
+  ReviewEmailData,
+} from "./email.service";
 
 export class BrevoEmailService {
-  private static readonly API_URL = 'https://api.brevo.com/v3/smtp/email';
+  private static readonly API_URL = "https://api.brevo.com/v3/smtp/email";
   private static readonly API_KEY = process.env.BREVO_API_KEY;
 
   /**
    * Send booking confirmation email via Brevo API
    */
-  static async sendBookingConfirmation(booking: BookingEmailData): Promise<boolean> {
+  static async sendBookingConfirmation(
+    booking: BookingEmailData,
+  ): Promise<boolean> {
     try {
       if (!this.API_KEY) {
-        console.error('❌ BREVO_API_KEY is not set in environment variables');
+        console.error("❌ BREVO_API_KEY is not set in environment variables");
         return false;
       }
 
-      console.log('📧 Sending booking confirmation via Brevo API...');
-      console.log('To:', booking.customerEmail);
-      console.log('Package:', booking.packageName);
+      console.log("📧 Sending booking confirmation via Brevo API...");
+      console.log("To:", booking.customerEmail);
+      console.log("Package:", booking.packageName);
+
+      // Debug: log vehicle booking fields right before rendering
+      console.log('[BREVO] Booking confirmation data:', {
+        isVehicleBooking: booking.isVehicleBooking,
+        vehicleName: booking.vehicleName,
+        vehicleSeatCapacity: booking.vehicleSeatCapacity,
+        adults: booking.adults,
+        children: booking.children,
+        packageType: booking.packageType,
+      });
 
       const html = this.generateBookingConfirmationHTML(booking);
-      
+
       const payload = {
         sender: {
           name: emailConfig.from.name,
@@ -33,26 +49,26 @@ export class BrevoEmailService {
       };
 
       const response = await fetch(this.API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': this.API_KEY,
+          "Content-Type": "application/json",
+          "api-key": this.API_KEY,
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('❌ Brevo API error:', response.status, errorBody);
+        console.error("❌ Brevo API error:", response.status, errorBody);
         return false;
       }
 
       const result = await response.json();
-      console.log('✅ Booking confirmation email sent successfully via Brevo');
-      console.log('Message ID:', result.messageId);
+      console.log("✅ Booking confirmation email sent successfully via Brevo");
+      console.log("Message ID:", result.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error sending booking confirmation via Brevo:', error);
+      console.error("❌ Error sending booking confirmation via Brevo:", error);
       return false;
     }
   }
@@ -60,19 +76,21 @@ export class BrevoEmailService {
   /**
    * Send cart booking confirmation email via Brevo API
    */
-  static async sendCartBookingConfirmation(cartData: CartBookingEmailData): Promise<boolean> {
+  static async sendCartBookingConfirmation(
+    cartData: CartBookingEmailData,
+  ): Promise<boolean> {
     try {
       if (!this.API_KEY) {
-        console.error('❌ BREVO_API_KEY is not set in environment variables');
+        console.error("❌ BREVO_API_KEY is not set in environment variables");
         return false;
       }
 
-      console.log('📧 Sending cart booking confirmation via Brevo API...');
-      console.log('To:', cartData.customerEmail);
-      console.log('Bookings count:', cartData.bookings.length);
+      console.log("📧 Sending cart booking confirmation via Brevo API...");
+      console.log("To:", cartData.customerEmail);
+      console.log("Bookings count:", cartData.bookings.length);
 
       const html = this.generateCartBookingConfirmationHTML(cartData);
-      
+
       const payload = {
         sender: {
           name: emailConfig.from.name,
@@ -84,26 +102,31 @@ export class BrevoEmailService {
       };
 
       const response = await fetch(this.API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': this.API_KEY,
+          "Content-Type": "application/json",
+          "api-key": this.API_KEY,
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('❌ Brevo API error:', response.status, errorBody);
+        console.error("❌ Brevo API error:", response.status, errorBody);
         return false;
       }
 
       const result = await response.json();
-      console.log('✅ Cart booking confirmation email sent successfully via Brevo');
-      console.log('Message ID:', result.messageId);
+      console.log(
+        "✅ Cart booking confirmation email sent successfully via Brevo",
+      );
+      console.log("Message ID:", result.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error sending cart booking confirmation via Brevo:', error);
+      console.error(
+        "❌ Error sending cart booking confirmation via Brevo:",
+        error,
+      );
       return false;
     }
   }
@@ -111,18 +134,20 @@ export class BrevoEmailService {
   /**
    * Send review request email via Brevo API
    */
-  static async sendReviewRequest(reviewData: ReviewEmailData): Promise<boolean> {
+  static async sendReviewRequest(
+    reviewData: ReviewEmailData,
+  ): Promise<boolean> {
     try {
       if (!this.API_KEY) {
-        console.error('❌ BREVO_API_KEY is not set in environment variables');
+        console.error("❌ BREVO_API_KEY is not set in environment variables");
         return false;
       }
 
-      console.log('📧 Sending review request via Brevo API...');
-      console.log('To:', reviewData.customerEmail);
+      console.log("📧 Sending review request via Brevo API...");
+      console.log("To:", reviewData.customerEmail);
 
       const html = this.generateReviewRequestHTML(reviewData);
-      
+
       const payload = {
         sender: {
           name: emailConfig.from.name,
@@ -134,26 +159,26 @@ export class BrevoEmailService {
       };
 
       const response = await fetch(this.API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': this.API_KEY,
+          "Content-Type": "application/json",
+          "api-key": this.API_KEY,
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('❌ Brevo API error:', response.status, errorBody);
+        console.error("❌ Brevo API error:", response.status, errorBody);
         return false;
       }
 
       const result = await response.json();
-      console.log('✅ Review request email sent successfully via Brevo');
-      console.log('Message ID:', result.messageId);
+      console.log("✅ Review request email sent successfully via Brevo");
+      console.log("Message ID:", result.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error sending review request via Brevo:', error);
+      console.error("❌ Error sending review request via Brevo:", error);
       return false;
     }
   }
@@ -161,19 +186,21 @@ export class BrevoEmailService {
   /**
    * Send booking notification email to admin
    */
-  static async sendBookingNotification(booking: BookingEmailData): Promise<boolean> {
+  static async sendBookingNotification(
+    booking: BookingEmailData,
+  ): Promise<boolean> {
     try {
       if (!this.API_KEY) {
-        console.error('❌ BREVO_API_KEY is not set in environment variables');
+        console.error("❌ BREVO_API_KEY is not set in environment variables");
         return false;
       }
 
-      console.log('📧 Sending booking notification to admin via Brevo API...');
-      console.log('Admin email:', emailConfig.templates.notificationEmail);
-      console.log('Package:', booking.packageName);
+      console.log("📧 Sending booking notification to admin via Brevo API...");
+      console.log("Admin email:", emailConfig.templates.notificationEmail);
+      console.log("Package:", booking.packageName);
 
       const html = this.generateBookingNotificationHTML(booking);
-      
+
       const payload = {
         sender: {
           name: emailConfig.from.name,
@@ -185,26 +212,32 @@ export class BrevoEmailService {
       };
 
       const response = await fetch(this.API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': this.API_KEY,
+          "Content-Type": "application/json",
+          "api-key": this.API_KEY,
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('❌ Brevo API error for booking notification:', response.status, errorBody);
+        console.error(
+          "❌ Brevo API error for booking notification:",
+          response.status,
+          errorBody,
+        );
         return false;
       }
 
       const result = await response.json();
-      console.log('✅ Booking notification email sent successfully to admin via Brevo');
-      console.log('Message ID:', result.messageId);
+      console.log(
+        "✅ Booking notification email sent successfully to admin via Brevo",
+      );
+      console.log("Message ID:", result.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error sending booking notification via Brevo:', error);
+      console.error("❌ Error sending booking notification via Brevo:", error);
       return false;
     }
   }
@@ -212,19 +245,23 @@ export class BrevoEmailService {
   /**
    * Send cart booking notification email to admin
    */
-  static async sendCartBookingNotification(cartData: CartBookingEmailData): Promise<boolean> {
+  static async sendCartBookingNotification(
+    cartData: CartBookingEmailData,
+  ): Promise<boolean> {
     try {
       if (!this.API_KEY) {
-        console.error('❌ BREVO_API_KEY is not set in environment variables');
+        console.error("❌ BREVO_API_KEY is not set in environment variables");
         return false;
       }
 
-      console.log('📧 Sending cart booking notification to admin via Brevo API...');
-      console.log('Admin email:', emailConfig.templates.notificationEmail);
-      console.log('Bookings count:', cartData.bookings.length);
+      console.log(
+        "📧 Sending cart booking notification to admin via Brevo API...",
+      );
+      console.log("Admin email:", emailConfig.templates.notificationEmail);
+      console.log("Bookings count:", cartData.bookings.length);
 
       const html = this.generateCartBookingNotificationHTML(cartData);
-      
+
       const payload = {
         sender: {
           name: emailConfig.from.name,
@@ -236,26 +273,35 @@ export class BrevoEmailService {
       };
 
       const response = await fetch(this.API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': this.API_KEY,
+          "Content-Type": "application/json",
+          "api-key": this.API_KEY,
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('❌ Brevo API error for cart booking notification:', response.status, errorBody);
+        console.error(
+          "❌ Brevo API error for cart booking notification:",
+          response.status,
+          errorBody,
+        );
         return false;
       }
 
       const result = await response.json();
-      console.log('✅ Cart booking notification email sent successfully to admin via Brevo');
-      console.log('Message ID:', result.messageId);
+      console.log(
+        "✅ Cart booking notification email sent successfully to admin via Brevo",
+      );
+      console.log("Message ID:", result.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error sending cart booking notification via Brevo:', error);
+      console.error(
+        "❌ Error sending cart booking notification via Brevo:",
+        error,
+      );
       return false;
     }
   }
@@ -266,11 +312,11 @@ export class BrevoEmailService {
   static async sendTestEmail(toEmail: string): Promise<boolean> {
     try {
       if (!this.API_KEY) {
-        console.error('❌ BREVO_API_KEY is not set in environment variables');
+        console.error("❌ BREVO_API_KEY is not set in environment variables");
         return false;
       }
 
-      console.log('📧 Sending test email via Brevo API to:', toEmail);
+      console.log("📧 Sending test email via Brevo API to:", toEmail);
 
       const payload = {
         sender: {
@@ -278,7 +324,7 @@ export class BrevoEmailService {
           email: emailConfig.from.email,
         },
         to: [{ email: toEmail }],
-        subject: '✅ Brevo Email Test - Configuration Successful',
+        subject: "✅ Brevo Email Test - Configuration Successful",
         htmlContent: `
         <!DOCTYPE html>
         <html>
@@ -312,26 +358,26 @@ export class BrevoEmailService {
       };
 
       const response = await fetch(this.API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': this.API_KEY,
+          "Content-Type": "application/json",
+          "api-key": this.API_KEY,
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('❌ Brevo API error:', response.status, errorBody);
+        console.error("❌ Brevo API error:", response.status, errorBody);
         return false;
       }
 
       const result = await response.json();
-      console.log('✅ Test email sent successfully via Brevo');
-      console.log('Message ID:', result.messageId);
+      console.log("✅ Test email sent successfully via Brevo");
+      console.log("Message ID:", result.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error sending test email via Brevo:', error);
+      console.error("❌ Error sending test email via Brevo:", error);
       return false;
     }
   }
@@ -339,15 +385,20 @@ export class BrevoEmailService {
   /**
    * Send feedback/contact email to site owner
    */
-  static async sendFeedback(toEmail: string, senderName: string, senderEmail: string, message: string): Promise<boolean> {
+  static async sendFeedback(
+    toEmail: string,
+    senderName: string,
+    senderEmail: string,
+    message: string,
+  ): Promise<boolean> {
     try {
       if (!this.API_KEY) {
-        console.error('❌ BREVO_API_KEY is not set in environment variables');
+        console.error("❌ BREVO_API_KEY is not set in environment variables");
         return false;
       }
 
-      console.log('📧 Sending feedback email via Brevo API...');
-      console.log('From:', senderEmail, 'Name:', senderName);
+      console.log("📧 Sending feedback email via Brevo API...");
+      console.log("From:", senderEmail, "Name:", senderName);
 
       const html = `
       <!DOCTYPE html>
@@ -382,26 +433,26 @@ export class BrevoEmailService {
       };
 
       const response = await fetch(this.API_URL, {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'api-key': this.API_KEY,
+          "Content-Type": "application/json",
+          "api-key": this.API_KEY,
         },
         body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
-        console.error('❌ Brevo API error:', response.status, errorBody);
+        console.error("❌ Brevo API error:", response.status, errorBody);
         return false;
       }
 
       const result = await response.json();
-      console.log('✅ Feedback email sent successfully via Brevo');
-      console.log('Message ID:', result.messageId);
+      console.log("✅ Feedback email sent successfully via Brevo");
+      console.log("Message ID:", result.messageId);
       return true;
     } catch (error) {
-      console.error('❌ Error sending feedback email via Brevo:', error);
+      console.error("❌ Error sending feedback email via Brevo:", error);
       return false;
     }
   }
@@ -409,17 +460,19 @@ export class BrevoEmailService {
   /**
    * Generate booking confirmation HTML - reusing the existing template
    */
-  private static generateBookingConfirmationHTML(booking: BookingEmailData): string {
+  private static generateBookingConfirmationHTML(
+    booking: BookingEmailData,
+  ): string {
     const formatDate = (dateString: string) => {
       try {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -429,14 +482,14 @@ export class BrevoEmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -445,13 +498,16 @@ export class BrevoEmailService {
     };
 
     const getLuggageInfo = (packageType: string) => {
-      return packageType === 'transfer' 
-        ? 'Luggage upto 20kg is allowed per person'
-        : 'Luggage and large backpacks cannot be brought on the tour.';
+      return packageType === "transfer"
+        ? "Luggage upto 20kg is allowed per person"
+        : "Luggage and large backpacks cannot be brought on the tour.";
     };
 
     const baseUrl = emailConfig.templates.website;
-    const tourDetailsUrl = booking.packageType === 'tour' ? `${baseUrl}/tours/${booking.packageId}` : `${baseUrl}/transfers/${booking.packageId}`;
+    const tourDetailsUrl =
+      booking.packageType === "tour"
+        ? `${baseUrl}/tours/${booking.packageId}`
+        : `${baseUrl}/transfers/${booking.packageId}`;
 
     return `
     <!DOCTYPE html>
@@ -539,7 +595,9 @@ export class BrevoEmailService {
                 <td class="label">Time</td>
                 <td class="value">${formatTime(booking.time)}</td>
               </tr>
-              ${booking.packageType === 'transfer' && booking.from && booking.to ? `
+              ${
+                booking.packageType === "transfer" && booking.from && booking.to
+                  ? `
               <tr>
                 <td class="label">From</td>
                 <td class="value">${booking.from}</td>
@@ -548,22 +606,29 @@ export class BrevoEmailService {
                 <td class="label">To</td>
                 <td class="value">${booking.to}</td>
               </tr>
-              ` : ''}
-              ${booking.isVehicleBooking ? `
+              `
+                  : ""
+              }
+              ${
+                booking.isVehicleBooking
+                  ? `
               <tr>
                 <td class="label">Vehicle</td>
-                <td class="value">${booking.vehicleName || 'Private Vehicle'}</td>
+                <td class="value">${booking.vehicleName || "Private Vehicle"}</td>
               </tr>
               <tr>
                 <td class="label">Seat Capacity</td>
-                <td class="value">${booking.vehicleSeatCapacity || 'N/A'} seats</td>
+                <td class="value">${booking.vehicleSeatCapacity || "N/A"} seats</td>
               </tr>
-              ` : `
+              `
+                  : `
               <tr>
                 <td class="label">Adults</td>
                 <td class="value">${booking.adults}</td>
               </tr>
-              ${booking.children > 0 ? `
+              ${
+                booking.children > 0
+                  ? `
               <tr>
                 <td class="label">Children</td>
                 <td class="value">${booking.children}</td>
@@ -572,18 +637,25 @@ export class BrevoEmailService {
                 <td class="label" style="font-size:12px; color:#6b7280; font-weight:600; font-family: 'Poppins', sans-serif;">Age between 3 to 7 years</td>
                 <td class="value"></td>
               </tr>
-              ` : ''}
-              `}
+              `
+                  : ""
+              }
+              `
+              }
               <tr>
                 <td class="label">Service Type</td>
-                <td class="value">${booking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service'}</td>
+                <td class="value">${booking.packageType === "tour" ? "Tour Package" : "Transfer Service"}</td>
               </tr>
-              ${booking.pickupLocation ? `
+              ${
+                booking.pickupLocation
+                  ? `
               <tr>
                 <td class="label">Pickup</td>
                 <td class="value">${booking.pickupLocation}</td>
               </tr>
-              ` : ''}
+              `
+                  : ""
+              }
             </table>
           </div>
           <div class="booking-footer">
@@ -610,12 +682,16 @@ export class BrevoEmailService {
           </ul>
         </div>
 
-        ${booking.pickupGuidelines ? `
+        ${
+          booking.pickupGuidelines
+            ? `
         <div class="info-box" style="background: #FFF5E6; border: 1px solid #E2A45A;">
           <h3 style="color: #0F172A; margin-bottom: 10px; font-weight: 600;">📍 Pickup Guidelines:</h3>
           <p style="color: #4B5563; line-height: 1.8; margin: 0;">${booking.pickupGuidelines}</p>
         </div>
-        ` : ''}
+        `
+            : ""
+        }
 
                 <p class="email-text" style="margin-top: 30px; color: #444;">
                     If you have any questions please don't hesitate to contact us. We're here to make your experience unforgettable!
@@ -647,17 +723,19 @@ export class BrevoEmailService {
   /**
    * Generate cart booking confirmation HTML - simplified version of the existing template
    */
-  private static generateCartBookingConfirmationHTML(cartData: CartBookingEmailData): string {
+  private static generateCartBookingConfirmationHTML(
+    cartData: CartBookingEmailData,
+  ): string {
     const formatDate = (dateString: string) => {
       try {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -667,14 +745,14 @@ export class BrevoEmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -683,7 +761,7 @@ export class BrevoEmailService {
     };
 
     const getCartLuggageInfo = () => {
-      return 'Luggage upto 20kg is allowed per person for transfers. But for tours luggage and large backpacks cannot be brought';
+      return "Luggage upto 20kg is allowed per person for transfers. But for tours luggage and large backpacks cannot be brought";
     };
 
     const totalBookings = cartData.bookings.length;
@@ -693,17 +771,29 @@ export class BrevoEmailService {
       return total + (booking.adults || 0) + (booking.children || 0);
     }, 0);
 
-    const bookingRows = cartData.bookings.map((booking, index) => {
-      const formattedDate = booking.date ? formatDate(booking.date) : 'Invalid Date';
-      const formattedTime = booking.time ? formatTime(booking.time) : 'Invalid Time';
-      const formattedTotal = typeof booking.total === 'number' ? booking.total.toFixed(2) : Number(booking.total || 0).toFixed(2);
+    const bookingRows = cartData.bookings
+      .map((booking, index) => {
+        const formattedDate = booking.date
+          ? formatDate(booking.date)
+          : "Invalid Date";
+        const formattedTime = booking.time
+          ? formatTime(booking.time)
+          : "Invalid Time";
+        const formattedTotal =
+          typeof booking.total === "number"
+            ? booking.total.toFixed(2)
+            : Number(booking.total || 0).toFixed(2);
 
-      return `
+        return `
         <div style="background: #f9f9f9; border-radius: 8px; padding: 15px; margin: 15px 0; border-left: 4px solid #E2A45A;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
             <div>
               <div style="font-size: 16px; color: #E2A45A; font-weight: 600;">Booking #${index + 1} - ${booking.packageName}</div>
-              <div style="color: #666; font-size: 13px;">ID: #${String(booking.bookingId || '').slice(-8).toUpperCase()}</div>
+              <div style="color: #666; font-size: 13px;">ID: #${String(
+                booking.bookingId || "",
+              )
+                .slice(-8)
+                .toUpperCase()}</div>
             </div>
             <div style="background: #0F172A; color: white; padding: 8px 12px; border-radius: 6px;">
               <div style="font-size: 16px; font-weight: 700;">${cartData.currency} ${formattedTotal}</div>
@@ -712,23 +802,32 @@ export class BrevoEmailService {
           <div style="color: #444; font-size: 14px;">
             <div><strong>Date:</strong> ${formattedDate}</div>
             <div><strong>Time:</strong> ${formattedTime}</div>
-            ${booking.isVehicleBooking ? `
-            <div><strong>Vehicle:</strong> ${booking.vehicleName || 'Private Vehicle'}</div>
-            <div><strong>Seat Capacity:</strong> ${booking.vehicleSeatCapacity || 'N/A'} seats</div>
-            ` : `
-            <div><strong>Guests:</strong> ${booking.adults} adult${booking.adults > 1 ? 's' : ''}${booking.children > 0 ? `, ${booking.children} child${booking.children > 1 ? 'ren' : ''}` : ''}</div>
-            `}
-            ${booking.pickupLocation ? `<div><strong>Pickup:</strong> ${booking.pickupLocation}</div>` : ''}
-            ${booking.pickupGuidelines ? `
+            ${
+              booking.isVehicleBooking
+                ? `
+            <div><strong>Vehicle:</strong> ${booking.vehicleName || "Private Vehicle"}</div>
+            <div><strong>Seat Capacity:</strong> ${booking.vehicleSeatCapacity || "N/A"} seats</div>
+            `
+                : `
+            <div><strong>Guests:</strong> ${booking.adults} adult${booking.adults > 1 ? "s" : ""}${booking.children > 0 ? `, ${booking.children} child${booking.children > 1 ? "ren" : ""}` : ""}</div>
+            `
+            }
+            ${booking.pickupLocation ? `<div><strong>Pickup:</strong> ${booking.pickupLocation}</div>` : ""}
+            ${
+              booking.pickupGuidelines
+                ? `
             <div style="margin-top: 10px; padding: 10px; background: #FFF5E6; border-radius: 6px; border-left: 3px solid #E2A45A;">
               <div style="font-weight: 600; color: #0F172A; margin-bottom: 5px;">📍 Pickup Guidelines:</div>
               <div style="color: #4B5563; font-size: 13px; line-height: 1.6;">${booking.pickupGuidelines}</div>
             </div>
-            ` : ''}
+            `
+                : ""
+            }
           </div>
         </div>
       `;
-    }).join('');
+      })
+      .join("");
 
     return `
     <!DOCTYPE html>
@@ -772,17 +871,17 @@ export class BrevoEmailService {
 
             <div class="content">
                 <div class="greeting">Hello ${cartData.customerName}!</div>
-                <p>Thank you for choosing ${emailConfig.from.name}! We're excited to confirm your ${totalBookings} booking${totalBookings > 1 ? 's' : ''} for amazing experiences.</p>
+                <p>Thank you for choosing ${emailConfig.from.name}! We're excited to confirm your ${totalBookings} booking${totalBookings > 1 ? "s" : ""} for amazing experiences.</p>
 
                 <div class="summary-box">
                     <div class="summary-grid">
                         <div class="summary-item">
                             <div class="summary-number">${totalBookings}</div>
-                            <div class="summary-label">Booking${totalBookings > 1 ? 's' : ''}</div>
+                            <div class="summary-label">Booking${totalBookings > 1 ? "s" : ""}</div>
                         </div>
                         <div class="summary-item">
                             <div class="summary-number">${totalGuests}</div>
-                            <div class="summary-label">Total Guest${totalGuests > 1 ? 's' : ''}</div>
+                            <div class="summary-label">Total Guest${totalGuests > 1 ? "s" : ""}</div>
                         </div>
                         <div class="summary-item">
                             <div class="summary-number">${cartData.currency} ${cartData.totalAmount.toFixed(2)}</div>
@@ -848,17 +947,19 @@ export class BrevoEmailService {
   /**
    * Generate review request HTML - simplified version
    */
-  private static generateReviewRequestHTML(reviewData: ReviewEmailData): string {
+  private static generateReviewRequestHTML(
+    reviewData: ReviewEmailData,
+  ): string {
     const formatDate = (dateString: string) => {
       try {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -876,7 +977,7 @@ export class BrevoEmailService {
             <div class="content">
                 <div style="font-size: 18px; color: #E2A45A; margin-bottom: 20px; font-weight: 600;">Hello ${reviewData.customerName}!</div>
                 
-                <p>Thank you for choosing ${emailConfig.from.name} for your recent ${reviewData.packageType === 'tour' ? 'tour' : 'transfer'}: <strong>${reviewData.packageName}</strong> on ${formatDate(reviewData.date)}.</p>
+                <p>Thank you for choosing ${emailConfig.from.name} for your recent ${reviewData.packageType === "tour" ? "tour" : "transfer"}: <strong>${reviewData.packageName}</strong> on ${formatDate(reviewData.date)}.</p>
 
                 <p style="margin-top: 20px;">Your feedback helps us improve our services and helps other travelers make informed decisions. Would you mind taking a few minutes to share your experience?</p>
 
@@ -907,17 +1008,19 @@ export class BrevoEmailService {
   /**
    * Generate booking notification HTML for admin
    */
-  private static generateBookingNotificationHTML(booking: BookingEmailData): string {
+  private static generateBookingNotificationHTML(
+    booking: BookingEmailData,
+  ): string {
     const formatDate = (dateString: string) => {
       try {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -927,14 +1030,14 @@ export class BrevoEmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -988,7 +1091,7 @@ export class BrevoEmailService {
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Type:</span>
-                        <span class="detail-value">${booking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service'}</span>
+                        <span class="detail-value">${booking.packageType === "tour" ? "Tour Package" : "Transfer Service"}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Customer:</span>
@@ -1006,7 +1109,11 @@ export class BrevoEmailService {
                         <span class="detail-label">Time:</span>
                         <span class="detail-value">${formatTime(booking.time)}</span>
                     </div>
-                    ${booking.packageType === 'transfer' && booking.from && booking.to ? `
+                    ${
+                      booking.packageType === "transfer" &&
+                      booking.from &&
+                      booking.to
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">From:</span>
                         <span class="detail-value">${booking.from}</span>
@@ -1015,40 +1122,58 @@ export class BrevoEmailService {
                         <span class="detail-label">To:</span>
                         <span class="detail-value">${booking.to}</span>
                     </div>
-                    ` : ''}
-                    ${booking.isVehicleBooking ? `
+                    `
+                        : ""
+                    }
+                    ${
+                      booking.isVehicleBooking
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">Vehicle:</span>
-                        <span class="detail-value">${booking.vehicleName || 'Private Vehicle'}</span>
+                        <span class="detail-value">${booking.vehicleName || "Private Vehicle"}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Seat Capacity:</span>
-                        <span class="detail-value">${booking.vehicleSeatCapacity || 'N/A'} seats</span>
+                        <span class="detail-value">${booking.vehicleSeatCapacity || "N/A"} seats</span>
                     </div>
-                    ` : `
+                    `
+                        : `
                     <div class="detail-row">
                         <span class="detail-label">Adults:</span>
                         <span class="detail-value">${booking.adults}</span>
                     </div>
-                    ${booking.children > 0 ? `
+                    ${
+                      booking.children > 0
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">Children:</span>
                         <span class="detail-value">${booking.children}</span>
                     </div>
-                    ` : ''}
-                    `}
-                    ${booking.pickupLocation ? `
+                    `
+                        : ""
+                    }
+                    `
+                    }
+                    ${
+                      booking.pickupLocation
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">Pickup Location:</span>
                         <span class="detail-value">${booking.pickupLocation}</span>
                     </div>
-                    ` : ''}
-                    ${booking.pickupGuidelines ? `
+                    `
+                        : ""
+                    }
+                    ${
+                      booking.pickupGuidelines
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">Pickup Guidelines:</span>
                         <span class="detail-value">${booking.pickupGuidelines}</span>
                     </div>
-                    ` : ''}
+                    `
+                        : ""
+                    }
                     
                     <div class="total-row">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1076,16 +1201,18 @@ export class BrevoEmailService {
   /**
    * Generate cart booking notification HTML for admin
    */
-  private static generateCartBookingNotificationHTML(cartData: CartBookingEmailData): string {
+  private static generateCartBookingNotificationHTML(
+    cartData: CartBookingEmailData,
+  ): string {
     const formatDate = (dateString: string) => {
       try {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -1095,14 +1222,14 @@ export class BrevoEmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -1110,7 +1237,9 @@ export class BrevoEmailService {
       }
     };
 
-    const bookingRows = cartData.bookings.map((booking, index) => `
+    const bookingRows = cartData.bookings
+      .map(
+        (booking, index) => `
       <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <h4 style="color: #E2A45A; margin: 0;">Booking ${index + 1}</h4>
@@ -1120,31 +1249,45 @@ export class BrevoEmailService {
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
           <div><strong>Package:</strong> ${booking.packageName}</div>
-          <div><strong>Type:</strong> ${booking.packageType === 'tour' ? 'Tour' : 'Transfer'}</div>
+          <div><strong>Type:</strong> ${booking.packageType === "tour" ? "Tour" : "Transfer"}</div>
           <div><strong>Date:</strong> ${formatDate(booking.date)}</div>
           <div><strong>Time:</strong> ${formatTime(booking.time)}</div>
-          ${booking.isVehicleBooking ? `
-          <div><strong>Vehicle:</strong> ${booking.vehicleName || 'Private Vehicle'}</div>
-          <div><strong>Seats:</strong> ${booking.vehicleSeatCapacity || 'N/A'}</div>
-          ` : `
+          ${
+            booking.isVehicleBooking
+              ? `
+          <div><strong>Vehicle:</strong> ${booking.vehicleName || "Private Vehicle"}</div>
+          <div><strong>Seats:</strong> ${booking.vehicleSeatCapacity || "N/A"}</div>
+          `
+              : `
           <div><strong>Adults:</strong> ${booking.adults}</div>
           <div><strong>Children:</strong> ${booking.children}</div>
-          `}
-          ${booking.pickupLocation ? `
+          `
+          }
+          ${
+            booking.pickupLocation
+              ? `
           <div style="grid-column: 1 / -1;"><strong>Pickup:</strong> ${booking.pickupLocation}</div>
-          ` : ''}
-          ${booking.pickupGuidelines ? `
+          `
+              : ""
+          }
+          ${
+            booking.pickupGuidelines
+              ? `
           <div style="grid-column: 1 / -1; background: #FFF5E6; padding: 8px; border-radius: 4px; border-left: 3px solid #E2A45A;">
             <strong style="color: #0F172A;">📍 Pickup Guidelines:</strong><br>
             <span style="color: #374151; font-size: 13px;">${booking.pickupGuidelines}</span>
           </div>
-          ` : ''}
+          `
+              : ""
+          }
           <div style="grid-column: 1 / -1; text-align: right; margin-top: 8px;">
             <strong style="color: #E2A45A; font-size: 16px;">${cartData.currency} ${booking.total.toFixed(2)}</strong>
           </div>
         </div>
       </div>
-    `).join('');
+    `,
+      )
+      .join("");
 
     return `
     <!DOCTYPE html>

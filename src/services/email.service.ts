@@ -1,7 +1,7 @@
-import nodemailer from 'nodemailer';
-import { emailConfig } from '../config/email.config';
-import { Types } from 'mongoose';
-import { BrevoEmailService } from './brevo.service';
+import nodemailer from "nodemailer";
+import { emailConfig } from "../config/email.config";
+import { Types } from "mongoose";
+import { BrevoEmailService } from "./brevo.service";
 
 export interface BookingEmailData {
   customerName: string;
@@ -9,7 +9,7 @@ export interface BookingEmailData {
   bookingId: string;
   packageId: string;
   packageName: string;
-  packageType: 'tour' | 'transfer';
+  packageType: "tour" | "transfer";
   // Transfer-specific details
   from?: string;
   to?: string;
@@ -34,7 +34,7 @@ export interface CartBookingEmailData {
     bookingId: string;
     packageId: string;
     packageName: string;
-    packageType: 'tour' | 'transfer';
+    packageType: "tour" | "transfer";
     from?: string;
     to?: string;
     date: string;
@@ -58,7 +58,7 @@ export interface ReviewEmailData {
   customerEmail: string;
   bookingId: string;
   packageName: string;
-  packageType: 'tour' | 'transfer';
+  packageType: "tour" | "transfer";
   date: string;
   time: string;
   reviewFormUrl: string;
@@ -75,63 +75,85 @@ export class EmailService {
     try {
       // ONLY use Brevo - SMTP doesn't work reliably
       if (!process.env.BREVO_API_KEY) {
-        console.error('❌ CRITICAL: BREVO_API_KEY not configured! Cannot send emails.');
-        console.error('   Please configure BREVO_API_KEY in .env file');
-        
+        console.error(
+          "❌ CRITICAL: BREVO_API_KEY not configured! Cannot send emails.",
+        );
+        console.error("   Please configure BREVO_API_KEY in .env file");
+
         // Log failure for admin review
-        await this.logEmailFailure(booking, 'BREVO_API_KEY not configured');
+        await this.logEmailFailure(booking, "BREVO_API_KEY not configured");
         return false;
       }
 
-      console.log('📧 Using Brevo API for email delivery...');
-      
+      console.log("📧 Using Brevo API for email delivery...");
+
       // Send confirmation email with retry logic
       let retryCount = 0;
       const maxRetries = 3;
       let lastError: any;
-      
+
       while (retryCount < maxRetries) {
         try {
-          const confirmationResult = await BrevoEmailService.sendBookingConfirmation(booking);
-          
+          const confirmationResult =
+            await BrevoEmailService.sendBookingConfirmation(booking);
+
           if (confirmationResult) {
-            console.log(`✅ Confirmation email sent to ${booking.customerEmail} for booking ${booking.bookingId}`);
-            
+            console.log(
+              `✅ Confirmation email sent to ${booking.customerEmail} for booking ${booking.bookingId}`,
+            );
+
             // Also send notification to admin (non-blocking)
-            this.sendAdminNotification(booking).catch(err => {
-              console.error('⚠️ Admin notification failed (non-critical):', err.message);
+            this.sendAdminNotification(booking).catch((err) => {
+              console.error(
+                "⚠️ Admin notification failed (non-critical):",
+                err.message,
+              );
             });
-            
+
             return true;
           } else {
-            lastError = new Error('Brevo returned false');
+            lastError = new Error("Brevo returned false");
             retryCount++;
             if (retryCount < maxRetries) {
-              console.log(`⚠️ Email send failed, retry ${retryCount}/${maxRetries}...`);
-              await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+              console.log(
+                `⚠️ Email send failed, retry ${retryCount}/${maxRetries}...`,
+              );
+              await new Promise((resolve) =>
+                setTimeout(resolve, 1000 * retryCount),
+              );
             }
           }
         } catch (error: any) {
           lastError = error;
           retryCount++;
           if (retryCount < maxRetries) {
-            console.error(`❌ Email error (attempt ${retryCount}/${maxRetries}):`, error.message);
-            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount));
+            console.error(
+              `❌ Email error (attempt ${retryCount}/${maxRetries}):`,
+              error.message,
+            );
+            await new Promise((resolve) =>
+              setTimeout(resolve, 1000 * retryCount),
+            );
           }
         }
       }
-      
+
       // All retries failed
-      console.error(`❌ CRITICAL: Failed to send confirmation email after ${maxRetries} attempts`);
-      console.error('   Last error:', lastError?.message || 'Unknown error');
-      
+      console.error(
+        `❌ CRITICAL: Failed to send confirmation email after ${maxRetries} attempts`,
+      );
+      console.error("   Last error:", lastError?.message || "Unknown error");
+
       // Log failure for admin review
-      await this.logEmailFailure(booking, lastError?.message || 'Failed after retries');
-      
+      await this.logEmailFailure(
+        booking,
+        lastError?.message || "Failed after retries",
+      );
+
       return false;
     } catch (error: any) {
-      console.error('❌ Fatal error sending confirmation email:', error);
-      await this.logEmailFailure(booking, error.message || 'Fatal error');
+      console.error("❌ Fatal error sending confirmation email:", error);
+      await this.logEmailFailure(booking, error.message || "Fatal error");
       return false;
     }
   }
@@ -139,12 +161,14 @@ export class EmailService {
   /**
    * Send admin notification (non-critical, don't fail booking if this fails)
    */
-  private async sendAdminNotification(booking: BookingEmailData): Promise<void> {
+  private async sendAdminNotification(
+    booking: BookingEmailData,
+  ): Promise<void> {
     try {
       await BrevoEmailService.sendBookingNotification(booking);
-      console.log('📧 Admin notification sent for booking:', booking.bookingId);
+      console.log("📧 Admin notification sent for booking:", booking.bookingId);
     } catch (error: any) {
-      console.error('⚠️ Failed to send admin notification:', error.message);
+      console.error("⚠️ Failed to send admin notification:", error.message);
       // Don't throw - this is non-critical
     }
   }
@@ -154,18 +178,21 @@ export class EmailService {
    * Note: Email failures are now logged to console for debugging.
    * For production, consider using a proper logging service.
    */
-  private async logEmailFailure(booking: BookingEmailData, reason: string): Promise<void> {
+  private async logEmailFailure(
+    booking: BookingEmailData,
+    reason: string,
+  ): Promise<void> {
     try {
-      console.error('📝 Email failure logged:', {
+      console.error("📝 Email failure logged:", {
         bookingId: booking.bookingId,
         customerEmail: booking.customerEmail,
         customerName: booking.customerName,
         packageName: booking.packageName,
         reason,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
     } catch (logError: any) {
-      console.error('❌ Failed to log email failure:', logError.message);
+      console.error("❌ Failed to log email failure:", logError.message);
       // Don't throw - this is just logging
     }
   }
@@ -173,42 +200,58 @@ export class EmailService {
   /**
    * Send cart booking confirmation email
    */
-  async sendCartBookingConfirmation(cartData: CartBookingEmailData): Promise<boolean> {
+  async sendCartBookingConfirmation(
+    cartData: CartBookingEmailData,
+  ): Promise<boolean> {
     try {
       // Try Brevo first (bypasses SMTP port blocking)
       if (process.env.BREVO_API_KEY) {
-        console.log('📧 Using Brevo API for cart booking email delivery...');
-        const confirmationResult = await BrevoEmailService.sendCartBookingConfirmation(cartData);
-        
+        console.log("📧 Using Brevo API for cart booking email delivery...");
+        const confirmationResult =
+          await BrevoEmailService.sendCartBookingConfirmation(cartData);
+
         // Also send notification to admin
         try {
           await BrevoEmailService.sendCartBookingNotification(cartData);
-          console.log('📧 Admin notification sent for cart booking with', cartData.bookings.length, 'items');
+          console.log(
+            "📧 Admin notification sent for cart booking with",
+            cartData.bookings.length,
+            "items",
+          );
         } catch (notificationError) {
-          console.error('⚠️ Failed to send admin cart notification:', notificationError);
+          console.error(
+            "⚠️ Failed to send admin cart notification:",
+            notificationError,
+          );
           // Don't fail the main confirmation if notification fails
         }
-        
+
         return confirmationResult;
       }
 
       // Fallback to SMTP if Brevo is not configured
-      console.log('📧 Brevo not configured, falling back to SMTP...');
-      
+      console.log("📧 Brevo not configured, falling back to SMTP...");
+
       // Validate required environment variables
       if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.error('❌ Missing required email environment variables:');
-        console.error('SMTP_USER:', process.env.SMTP_USER ? '✓ Set' : '✗ Missing');
-        console.error('SMTP_PASS:', process.env.SMTP_PASS ? '✓ Set' : '✗ Missing');
-        throw new Error('Missing SMTP credentials in environment variables');
+        console.error("❌ Missing required email environment variables:");
+        console.error(
+          "SMTP_USER:",
+          process.env.SMTP_USER ? "✓ Set" : "✗ Missing",
+        );
+        console.error(
+          "SMTP_PASS:",
+          process.env.SMTP_PASS ? "✓ Set" : "✗ Missing",
+        );
+        throw new Error("Missing SMTP credentials in environment variables");
       }
 
       // Test connection first
       await EmailService.transporter.verify();
-      console.log('✅ SMTP connection verified successfully for cart booking');
+      console.log("✅ SMTP connection verified successfully for cart booking");
 
       const html = this.generateCartBookingConfirmationHTML(cartData);
-      
+
       const mailOptions = {
         from: `"${emailConfig.from.name}" <${emailConfig.from.email}>`,
         to: cartData.customerEmail,
@@ -217,8 +260,10 @@ export class EmailService {
       };
 
       await EmailService.transporter.sendMail(mailOptions);
-      console.log(`Cart confirmation email sent to ${cartData.customerEmail} for ${cartData.bookings.length} bookings`);
-      
+      console.log(
+        `Cart confirmation email sent to ${cartData.customerEmail} for ${cartData.bookings.length} bookings`,
+      );
+
       // Also send notification to admin via SMTP
       try {
         const adminMailOptions = {
@@ -228,15 +273,22 @@ export class EmailService {
           html: this.generateCartBookingNotificationHTML(cartData),
         };
         await EmailService.transporter.sendMail(adminMailOptions);
-        console.log('📧 Admin cart notification sent via SMTP for', cartData.bookings.length, 'bookings');
+        console.log(
+          "📧 Admin cart notification sent via SMTP for",
+          cartData.bookings.length,
+          "bookings",
+        );
       } catch (notificationError) {
-        console.error('⚠️ Failed to send admin cart notification via SMTP:', notificationError);
+        console.error(
+          "⚠️ Failed to send admin cart notification via SMTP:",
+          notificationError,
+        );
         // Don't fail the main confirmation if notification fails
       }
-      
+
       return true;
     } catch (error) {
-      console.error('Error sending cart confirmation email:', error);
+      console.error("Error sending cart confirmation email:", error);
       return false;
     }
   }
@@ -248,25 +300,27 @@ export class EmailService {
     try {
       // Try Brevo first (bypasses SMTP port blocking)
       if (process.env.BREVO_API_KEY) {
-        console.log('📧 Using Brevo API for review request email delivery...');
+        console.log("📧 Using Brevo API for review request email delivery...");
         return await BrevoEmailService.sendReviewRequest(reviewData);
       }
 
       // Fallback to SMTP if Brevo is not configured
-      console.log('📧 Brevo not configured, falling back to SMTP...');
-      
+      console.log("📧 Brevo not configured, falling back to SMTP...");
+
       // Validate required environment variables
       if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-        console.error('❌ Missing required email environment variables for review email');
-        throw new Error('Missing SMTP credentials in environment variables');
+        console.error(
+          "❌ Missing required email environment variables for review email",
+        );
+        throw new Error("Missing SMTP credentials in environment variables");
       }
 
       // Test connection first
       await EmailService.transporter.verify();
-      console.log('✅ SMTP connection verified successfully for review email');
+      console.log("✅ SMTP connection verified successfully for review email");
 
       const html = this.generateReviewRequestHTML(reviewData);
-      
+
       const mailOptions = {
         from: `"${emailConfig.from.name}" <${emailConfig.from.email}>`,
         to: reviewData.customerEmail,
@@ -275,10 +329,12 @@ export class EmailService {
       };
 
       await EmailService.transporter.sendMail(mailOptions);
-      console.log(`Review request email sent to ${reviewData.customerEmail} for booking ${reviewData.bookingId}`);
+      console.log(
+        `Review request email sent to ${reviewData.customerEmail} for booking ${reviewData.bookingId}`,
+      );
       return true;
     } catch (error) {
-      console.error('Error sending review request email:', error);
+      console.error("Error sending review request email:", error);
       return false;
     }
   }
@@ -292,11 +348,11 @@ export class EmailService {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -306,14 +362,14 @@ export class EmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -326,7 +382,10 @@ export class EmailService {
     const baseUrl = emailConfig.templates.website;
 
     // Build tour details link
-    const tourDetailsUrl = booking.packageType === 'tour' ? `${baseUrl}/tours/${booking.packageId}` : `${baseUrl}/transfers/${booking.packageId}`;
+    const tourDetailsUrl =
+      booking.packageType === "tour"
+        ? `${baseUrl}/tours/${booking.packageId}`
+        : `${baseUrl}/transfers/${booking.packageId}`;
 
     return `
     <!DOCTYPE html>
@@ -576,7 +635,9 @@ export class EmailService {
                                     gap: 16px;
                                     align-items: center;
                                 ">
-                                    ${booking.isVehicleBooking ? `
+                                    ${
+                                      booking.isVehicleBooking
+                                        ? `
                                     <div>
                                         <div style="
                                             font-size: 18px;
@@ -588,14 +649,15 @@ export class EmailService {
                                             font-size: 13px;
                                             color: #6b7280;
                                             font-family: 'Poppins', sans-serif;
-                                        ">${booking.vehicleName || 'Private Vehicle'}</div>
+                                        ">${booking.vehicleName || "Private Vehicle"}</div>
                                         <div style="
                                             font-size: 12px;
                                             color: #6b7280;
                                             font-family: 'Poppins', sans-serif;
-                                        ">${booking.vehicleSeatCapacity || 'N/A'} seats</div>
+                                        ">${booking.vehicleSeatCapacity || "N/A"} seats</div>
                                     </div>
-                                    ` : `
+                                    `
+                                        : `
                                     <div>
                                         <div style="
                                             font-size: 18px;
@@ -607,9 +669,11 @@ export class EmailService {
                                             font-size: 13px;
                                             color: #6b7280;
                                             font-family: 'Poppins', sans-serif;
-                                        ">Adult${booking.adults > 1 ? 's' : ''}</div>
+                                        ">Adult${booking.adults > 1 ? "s" : ""}</div>
                                     </div>
-                                    ${booking.children > 0 ? `
+                                    ${
+                                      booking.children > 0
+                                        ? `
                                     <div style="
                                         width: 1px;
                                         height: 30px;
@@ -626,25 +690,37 @@ export class EmailService {
                                             font-size: 13px;
                                             color: #6b7280;
                                             font-family: 'Poppins', sans-serif;
-                                        ">Child${booking.children > 1 ? 'ren' : ''}</div>
+                                        ">Child${booking.children > 1 ? "ren" : ""}</div>
                                         <div style="font-size:12px; color:#6b7280; margin-top:6px;">Age between 3 to 7 years</div>
                                     </div>
-                                    ` : ''}
-                                    `}
+                                    `
+                                        : ""
+                                    }
+                                    `
+                                    }
                                 </div>
-                                ${!booking.isVehicleBooking && booking.children > 0 ? `
+                                ${
+                                  !booking.isVehicleBooking &&
+                                  booking.children > 0
+                                    ? `
                                 <div style="display:flex; gap:16px; margin-top:8px;">
                                     <div style="flex:1;">
                                         <div style="font-size:12px; font-weight:600; color:#6b7280;">Age between 3 to 7 years</div>
                                     </div>
                                     <div style="flex:1;"></div>
                                 </div>
-                                ` : ''}
+                                `
+                                    : ""
+                                }
                                 </div>
                             </div>
                         </div>
 
-                        ${booking.packageType === 'transfer' && booking.from && booking.to ? `
+                        ${
+                          booking.packageType === "transfer" &&
+                          booking.from &&
+                          booking.to
+                            ? `
                         <!-- Transfer Route Information -->
                         <div style="
                             background: #fef3e7;
@@ -721,7 +797,9 @@ export class EmailService {
                                 </div>
                             </div>
                         </div>
-                        ` : ''}
+                        `
+                            : ""
+                        }
 
                         <!-- Additional Information -->
                         <div style="
@@ -751,10 +829,12 @@ export class EmailService {
                                     font-weight: 600;
                                     color: #374151;
                                     font-family: 'Poppins', sans-serif;
-                                ">${booking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service'}</div>
+                                ">${booking.packageType === "tour" ? "Tour Package" : "Transfer Service"}</div>
                             </div>
 
-                            ${booking.pickupLocation ? `
+                            ${
+                              booking.pickupLocation
+                                ? `
                             <!-- Pickup Location -->
                             <div style="
                                 background: #f0fdf4;
@@ -779,9 +859,11 @@ export class EmailService {
                                     line-height: 1.4;
                                 ">${booking.pickupLocation}</div>
                             </div>
-                            ` : `
+                            `
+                                : `
                             <div></div>
-                            `}
+                            `
+                            }
                             
                             <!-- Customer Name -->
                             <div style="
@@ -866,7 +948,7 @@ export class EmailService {
                             <path d="M10 12a2 2 0 100-4 2 2 0 000 4z"/>
                             <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd"/>
                         </svg>
-                        View ${booking.packageType === 'tour' ? 'Tour' : 'Transfer'}
+                        View ${booking.packageType === "tour" ? "Tour" : "Transfer"}
                     </a>
                 </div>
 
@@ -944,17 +1026,19 @@ export class EmailService {
   /**
    * Generate modern HTML email template for cart booking confirmation
    */
-  private generateCartBookingConfirmationHTML(cartData: CartBookingEmailData): string {
+  private generateCartBookingConfirmationHTML(
+    cartData: CartBookingEmailData,
+  ): string {
     const formatDate = (dateString: string) => {
       try {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -964,14 +1048,14 @@ export class EmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -992,21 +1076,36 @@ export class EmailService {
     }, 0);
 
     // Generate booking rows HTML
-    const bookingRows = cartData.bookings.map((booking, index) => {
-      const tourDetailsUrl = booking.packageType === 'tour' ? `${baseUrl}/tours/${booking.packageId}` : `${baseUrl}/transfers/${booking.packageId}`;
-      
-            // Use a compact table layout for more horizontal alignment in most mail clients
-            const formattedDate = booking.date ? formatDate(booking.date) : 'Invalid Date';
-            const formattedTime = booking.time ? formatTime(booking.time) : 'Invalid Time';
-            const formattedTotal = typeof booking.total === 'number' ? booking.total.toFixed(2) : Number(booking.total || 0).toFixed(2);
+    const bookingRows = cartData.bookings
+      .map((booking, index) => {
+        const tourDetailsUrl =
+          booking.packageType === "tour"
+            ? `${baseUrl}/tours/${booking.packageId}`
+            : `${baseUrl}/transfers/${booking.packageId}`;
 
-            return `
+        // Use a compact table layout for more horizontal alignment in most mail clients
+        const formattedDate = booking.date
+          ? formatDate(booking.date)
+          : "Invalid Date";
+        const formattedTime = booking.time
+          ? formatTime(booking.time)
+          : "Invalid Time";
+        const formattedTotal =
+          typeof booking.total === "number"
+            ? booking.total.toFixed(2)
+            : Number(booking.total || 0).toFixed(2);
+
+        return `
                 <div style="background: #f9f9f9; border-radius: 8px; padding: 12px; margin: 12px 0; border-left: 4px solid #0C7157;">
                     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse: collapse;">
                         <tr>
                             <td style="vertical-align: top; padding: 6px 8px;">
                                 <div style="font-size: 16px; color: #0C7157; font-weight: 600;">Booking #${index + 1} - ${booking.packageName}</div>
-                                <div style="color: #666; font-size: 13px; margin-top:6px;">Booking ID: <strong>#${String(booking.bookingId || '').slice(-8).toUpperCase()}</strong></div>
+                                <div style="color: #666; font-size: 13px; margin-top:6px;">Booking ID: <strong>#${String(
+                                  booking.bookingId || "",
+                                )
+                                  .slice(-8)
+                                  .toUpperCase()}</strong></div>
                             </td>
                             <td style="vertical-align: top; padding: 6px 8px; text-align: right; width: 160px;">
                                 <div style="background: #0C7157; color: white; padding: 10px; border-radius: 8px; display: inline-block; min-width: 120px;">
@@ -1022,11 +1121,14 @@ export class EmailService {
                                         <td style="width: 50%; padding: 6px 8px; vertical-align: top; color: #444; font-size: 13px;">
                                             <div><strong>Date:</strong> ${formattedDate}</div>
                                             <div style="margin-top:4px;"><strong>Time:</strong> ${formattedTime}</div>
-                                            <div style="margin-top:4px;"><strong>Guests:</strong> ${booking.isVehicleBooking ? 
-                                              `Vehicle - ${booking.vehicleName || 'Private Vehicle'} (${booking.vehicleSeatCapacity || 'N/A'} seats)` : 
-                                              `${booking.adults} adult${booking.adults > 1 ? 's' : ''}${booking.children > 0 ? `, ${booking.children} child${booking.children > 1 ? 'ren' : ''}` : ''}`
+                                            <div style="margin-top:4px;"><strong>Guests:</strong> ${
+                                              booking.isVehicleBooking
+                                                ? `Vehicle - ${booking.vehicleName || "Private Vehicle"} (${booking.vehicleSeatCapacity || "N/A"} seats)`
+                                                : `${booking.adults} adult${booking.adults > 1 ? "s" : ""}${booking.children > 0 ? `, ${booking.children} child${booking.children > 1 ? "ren" : ""}` : ""}`
                                             }</div>
-                                            ${booking.children > 0 ? `</div>
+                                            ${
+                                              booking.children > 0
+                                                ? `</div>
                                             </td>
                                         </tr>
                                         <tr>
@@ -1036,11 +1138,13 @@ export class EmailService {
                                             <td style="width: 50%; padding: 6px 8px; vertical-align: top; color: #444; font-size: 13px;">
                                             </td>
                                         </tr>
-                                        ` : ''}
+                                        `
+                                                : ""
+                                            }
                                         </td>
                                         <td style="width: 50%; padding: 6px 8px; vertical-align: top; color: #444; font-size: 13px;">
-                                            ${booking.pickupLocation ? `<div><strong>Pickup:</strong> ${booking.pickupLocation}</div>` : ''}
-                                            <div style="margin-top:6px;"><strong>Type:</strong> ${booking.packageType === 'tour' ? 'Tour' : 'Transfer'}</div>
+                                            ${booking.pickupLocation ? `<div><strong>Pickup:</strong> ${booking.pickupLocation}</div>` : ""}
+                                            <div style="margin-top:6px;"><strong>Type:</strong> ${booking.packageType === "tour" ? "Tour" : "Transfer"}</div>
                                         </td>
                                     </tr>
                                 </table>
@@ -1049,7 +1153,8 @@ export class EmailService {
                     </table>
                 </div>
             `;
-     }).join('');
+      })
+      .join("");
 
     return `
     <!DOCTYPE html>
@@ -1115,7 +1220,7 @@ export class EmailService {
                         </svg>
                         Bookings Confirmed!
                     </h1>
-                    <p>${totalBookings} booking${totalBookings > 1 ? 's' : ''} successfully booked</p>
+                    <p>${totalBookings} booking${totalBookings > 1 ? "s" : ""} successfully booked</p>
                 </div>
             </div>
 
@@ -1128,7 +1233,7 @@ export class EmailService {
                     Hello ${cartData.customerName}!
                 </div>
 
-                <p class="email-text">Thank you for choosing ${emailConfig.from.name}! We're excited to confirm your ${totalBookings} booking${totalBookings > 1 ? 's' : ''} for amazing experiences.</p>
+                <p class="email-text">Thank you for choosing ${emailConfig.from.name}! We're excited to confirm your ${totalBookings} booking${totalBookings > 1 ? "s" : ""} for amazing experiences.</p>
 
                 <div class="summary-box">
                     <h2 style="color: #0C7157; margin-bottom: 20px; font-size: 20px; font-family: 'Poppins', sans-serif; font-weight: 600; text-align: center;">
@@ -1145,7 +1250,7 @@ export class EmailService {
                         </div>
                         <div class="summary-item" role="presentation">
                             <div class="summary-number">${totalGuests}</div>
-                            <div class="summary-label">${cartData.bookings.some(b => b.isVehicleBooking) ? 'Guests/Vehicles' : 'Total Guests'}</div>
+                            <div class="summary-label">${cartData.bookings.some((b) => b.isVehicleBooking) ? "Guests/Vehicles" : "Total Guests"}</div>
                         </div>
                         <div class="summary-item" role="presentation">
                             <div class="summary-number">${cartData.currency} ${cartData.totalAmount.toFixed(2)}</div>
@@ -1246,11 +1351,11 @@ export class EmailService {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -1260,14 +1365,14 @@ export class EmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -1562,11 +1667,11 @@ export class EmailService {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'long',
-          year: 'numeric',
-          month: 'long',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -1576,14 +1681,14 @@ export class EmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -1637,7 +1742,7 @@ export class EmailService {
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Type:</span>
-                        <span class="detail-value">${booking.packageType === 'tour' ? 'Tour Package' : 'Transfer Service'}</span>
+                        <span class="detail-value">${booking.packageType === "tour" ? "Tour Package" : "Transfer Service"}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Customer:</span>
@@ -1655,7 +1760,11 @@ export class EmailService {
                         <span class="detail-label">Time:</span>
                         <span class="detail-value">${formatTime(booking.time)}</span>
                     </div>
-                    ${booking.packageType === 'transfer' && booking.from && booking.to ? `
+                    ${
+                      booking.packageType === "transfer" &&
+                      booking.from &&
+                      booking.to
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">From:</span>
                         <span class="detail-value">${booking.from}</span>
@@ -1664,34 +1773,48 @@ export class EmailService {
                         <span class="detail-label">To:</span>
                         <span class="detail-value">${booking.to}</span>
                     </div>
-                    ` : ''}
-                    ${booking.isVehicleBooking ? `
+                    `
+                        : ""
+                    }
+                    ${
+                      booking.isVehicleBooking
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">Vehicle:</span>
-                        <span class="detail-value">${booking.vehicleName || 'Private Vehicle'}</span>
+                        <span class="detail-value">${booking.vehicleName || "Private Vehicle"}</span>
                     </div>
                     <div class="detail-row">
                         <span class="detail-label">Seat Capacity:</span>
-                        <span class="detail-value">${booking.vehicleSeatCapacity || 'N/A'} seats</span>
+                        <span class="detail-value">${booking.vehicleSeatCapacity || "N/A"} seats</span>
                     </div>
-                    ` : `
+                    `
+                        : `
                     <div class="detail-row">
                         <span class="detail-label">Adults:</span>
                         <span class="detail-value">${booking.adults}</span>
                     </div>
-                    ${booking.children > 0 ? `
+                    ${
+                      booking.children > 0
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">Children:</span>
                         <span class="detail-value">${booking.children}</span>
                     </div>
-                    ` : ''}
-                    `}
-                    ${booking.pickupLocation ? `
+                    `
+                        : ""
+                    }
+                    `
+                    }
+                    ${
+                      booking.pickupLocation
+                        ? `
                     <div class="detail-row">
                         <span class="detail-label">Pickup Location:</span>
                         <span class="detail-value">${booking.pickupLocation}</span>
                     </div>
-                    ` : ''}
+                    `
+                        : ""
+                    }
                     
                     <div class="total-row">
                         <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1719,16 +1842,18 @@ export class EmailService {
   /**
    * Generate cart booking notification HTML for admin (SMTP version)
    */
-  private generateCartBookingNotificationHTML(cartData: CartBookingEmailData): string {
+  private generateCartBookingNotificationHTML(
+    cartData: CartBookingEmailData,
+  ): string {
     const formatDate = (dateString: string) => {
       try {
         if (!dateString) return "Invalid Date";
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return "Invalid Date";
-        return date.toLocaleDateString('en-US', {
-          weekday: 'short',
-          month: 'short',
-          day: 'numeric',
+        return date.toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
         });
       } catch {
         return "Invalid Date";
@@ -1738,14 +1863,14 @@ export class EmailService {
     const formatTime = (timeString: string) => {
       try {
         if (!timeString) return "Invalid Time";
-        const [hours, minutes] = timeString.split(':');
+        const [hours, minutes] = timeString.split(":");
         if (!hours || !minutes) return timeString;
         const date = new Date();
         date.setHours(parseInt(hours), parseInt(minutes));
         if (isNaN(date.getTime())) return timeString;
-        return date.toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
+        return date.toLocaleTimeString("en-US", {
+          hour: "numeric",
+          minute: "2-digit",
           hour12: true,
         });
       } catch {
@@ -1753,7 +1878,9 @@ export class EmailService {
       }
     };
 
-    const bookingRows = cartData.bookings.map((booking, index) => `
+    const bookingRows = cartData.bookings
+      .map(
+        (booking, index) => `
       <div style="background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; padding: 15px; margin-bottom: 15px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
           <h4 style="color: #dc2626; margin: 0;">Booking ${index + 1}</h4>
@@ -1763,25 +1890,35 @@ export class EmailService {
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px;">
           <div><strong>Package:</strong> ${booking.packageName}</div>
-          <div><strong>Type:</strong> ${booking.packageType === 'tour' ? 'Tour' : 'Transfer'}</div>
+          <div><strong>Type:</strong> ${booking.packageType === "tour" ? "Tour" : "Transfer"}</div>
           <div><strong>Date:</strong> ${formatDate(booking.date)}</div>
           <div><strong>Time:</strong> ${formatTime(booking.time)}</div>
-          ${booking.isVehicleBooking ? `
-          <div><strong>Vehicle:</strong> ${booking.vehicleName || 'Private Vehicle'}</div>
-          <div><strong>Seats:</strong> ${booking.vehicleSeatCapacity || 'N/A'}</div>
-          ` : `
+          ${
+            booking.isVehicleBooking
+              ? `
+          <div><strong>Vehicle:</strong> ${booking.vehicleName || "Private Vehicle"}</div>
+          <div><strong>Seats:</strong> ${booking.vehicleSeatCapacity || "N/A"}</div>
+          `
+              : `
           <div><strong>Adults:</strong> ${booking.adults}</div>
           <div><strong>Children:</strong> ${booking.children}</div>
-          `}
-          ${booking.pickupLocation ? `
+          `
+          }
+          ${
+            booking.pickupLocation
+              ? `
           <div style="grid-column: 1 / -1;"><strong>Pickup:</strong> ${booking.pickupLocation}</div>
-          ` : ''}
+          `
+              : ""
+          }
           <div style="grid-column: 1 / -1; text-align: right; margin-top: 8px;">
             <strong style="color: #dc2626; font-size: 16px;">${cartData.currency} ${booking.total.toFixed(2)}</strong>
           </div>
         </div>
       </div>
-    `).join('');
+    `,
+      )
+      .join("");
 
     return `
     <!DOCTYPE html>

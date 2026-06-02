@@ -13,6 +13,7 @@
 
 import { Request, Response } from 'express';
 import { CommercePayService } from '../services/commercepay.service';
+import { TimeSlotService } from '../services/timeSlot.service';
 import BookingModel from '../models/Booking';
 import { BrevoEmailService } from '../services/brevo.service';
 import { generateIdempotencyKey, logPaymentOperation, COMMERCEPAY_CONSTANTS } from '../utils/commercepay.utils';
@@ -50,13 +51,13 @@ export class CommercePayPaymentController {
     let referenceCode: string | null = null;
 
     try {
-      const { bookingData, amount, currency = 'MYR' } = req.body;
+      const { bookingData, amount, currency = 'MYR', channelId, providerChannelId } = req.body;
 
-      // Validate request - bookingId is optional now (can be temp reference code)
+      // Validate request - bookingData must contain booking details for reconciliation
       if (!bookingData) {
         res.status(400).json({
           success: false,
-          message: 'Invalid request: Missing required fields',
+          message: 'Invalid request: Missing booking data',
           code: 'INVALID_REQUEST',
         } as ApiResponse);
         return;
@@ -71,49 +72,146 @@ export class CommercePayPaymentController {
         return;
       }
 
-      // Optional: Validate booking exists only if bookingId is a real ObjectId
-      if (bookingData.bookingId && bookingData.bookingId.match(/^[0-9a-f]{24}$/i)) {
-        const booking = await BookingModel.findById(bookingData.bookingId);
-        if (!booking) {
-          res.status(404).json({
-            success: false,
-            message: 'Booking not found',
-            code: 'BOOKING_NOT_FOUND',
-          } as ApiResponse);
-          return;
-        }
+      if (!bookingData.packageType || !['tour', 'transfer'].includes(bookingData.packageType)) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid booking data: packageType is required',
+          code: 'INVALID_BOOKING_DATA',
+        } as ApiResponse);
+        return;
+      }
+
+      if (!bookingData.packageId) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid booking data: packageId is required',
+          code: 'INVALID_BOOKING_DATA',
+        } as ApiResponse);
+        return;
+      }
+
+      const requestedPersons = (bookingData.isVehicleBooking ? 1 : (Number(bookingData.adults || 0) + Number(bookingData.children || 0)));
+      const desiredDate = new Date(bookingData.date);
+      const formattedDate = TimeSlotService.formatDateToMalaysiaTimezone(
+        desiredDate.toISOString().split('T')[0]
+      );
+
+      const availability = await TimeSlotService.checkAvailability(
+        bookingData.packageType,
+        new mongoose.Types.ObjectId(bookingData.packageId),
+        formattedDate,
+        bookingData.time,
+        requestedPersons
+      );
+
+      if (!availability.available) {
+        res.status(400).json({
+          success: false,
+          message: availability.reason || 'Selected time slot is not available',
+          code: 'TIME_SLOT_UNAVAILABLE',
+        } as ApiResponse);
+        return;
       }
 
       // Generate reference code (idempotent)
       referenceCode = `CHLT-${bookingData.bookingId || 'TEMP'}-${Date.now()}`;
 
+      // Persist a pending booking before redirecting to CommercePay
+      let booking = await BookingModel.findOne({
+        'paymentInfo.commercePayReferenceCode': referenceCode,
+      });
+
+      const bankCharge = Number(amount) - Number(bookingData.subtotal || amount);
+      const paymentInfo = {
+        amount: Number(amount),
+        bankCharge: Number.isFinite(bankCharge) && bankCharge >= 0 ? Number(bankCharge) : 0,
+        currency,
+        paymentStatus: 'pending' as const,
+        paymentGateway: 'commercepay' as const,
+        commercePayReferenceCode: referenceCode,
+        paymentInitiatedAt: new Date(),
+      };
+
+      if (!booking) {
+        booking = new BookingModel({
+          packageType: bookingData.packageType,
+          packageId: new mongoose.Types.ObjectId(bookingData.packageId),
+          date: desiredDate,
+          time: bookingData.time,
+          adults: Number(bookingData.adults || 0),
+          children: Number(bookingData.children || 0),
+          pickupLocation: bookingData.pickupLocation || '',
+          contactInfo: {
+            name: bookingData.contactInfo?.name || bookingData.customerName || 'Guest',
+            email: bookingData.contactInfo?.email || bookingData.customerEmail || 'unknown@example.com',
+            phone: bookingData.contactInfo?.phone || '',
+            whatsapp: bookingData.contactInfo?.whatsapp || bookingData.contactInfo?.phone || '',
+          },
+          subtotal: Number(bookingData.subtotal || 0),
+          total: Number(amount),
+          status: 'pending',
+          bookingStatus: 'pending',
+          paymentInfo,
+          packageName: bookingData.packageName || bookingData.title || '',
+          customerName: bookingData.contactInfo?.name || bookingData.customerName || '',
+          customerEmail: bookingData.contactInfo?.email || bookingData.customerEmail || '',
+          selectedTimeSlot: bookingData.selectedTimeSlot ? new mongoose.Types.ObjectId(bookingData.selectedTimeSlot) : undefined,
+        });
+      } else {
+        booking.paymentInfo = { ...booking.paymentInfo, ...paymentInfo };
+        booking.total = Number(amount);
+        booking.status = 'pending';
+        booking.bookingStatus = 'pending';
+      }
+
+      await booking.save();
+
       // Request payment from CommercePay (don't create booking yet)
       const ipAddress = (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() || req.ip || '127.0.0.1';
-const channelId = process.env.COMMERCEPAY_CHANNEL_ID ? Number(process.env.COMMERCEPAY_CHANNEL_ID) : undefined;
-      const providerChannelId = process.env.COMMERCEPAY_PROVIDER_CHANNEL_ID || undefined;
+      const selectedChannelIdRaw =
+        channelId !== undefined && channelId !== null && String(channelId).trim() !== ''
+          ? channelId
+          : (process.env.COMMERCEPAY_CHANNEL_ID || undefined);
+      const selectedChannelId =
+        selectedChannelIdRaw !== undefined && selectedChannelIdRaw !== null && String(selectedChannelIdRaw).trim() !== ''
+          ? (() => {
+              const raw = String(selectedChannelIdRaw).trim();
+              const numeric = Number(raw);
+              return Number.isNaN(numeric) ? raw : numeric;
+            })()
+          : undefined;
+      const selectedProviderChannelId = providerChannelId || process.env.COMMERCEPAY_PROVIDER_CHANNEL_ID || undefined;
 
-const requestPayload = {
+      console.log('createPaymentSession - received channelId:', channelId, 'providerChannelId:', providerChannelId);
+      console.log('createPaymentSession - selected channelId:', selectedChannelId, 'providerChannelId:', selectedProviderChannelId);
+
+      const requestPayload = {
                 amount: Math.round(amount * 100), // Convert to cents
                 currencyCode: currency,
                 referenceCode,
                 returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment-commercepay-callback?reference=${referenceCode}`,
                 callbackUrl: `${process.env.API_URL || 'http://localhost:3001'}/api/payment/commercepay/webhook`,
                 description: `Tour Booking - ${bookingData.packageName || 'Cameron Highlands Tour'}`,
-                customerName: bookingData.customerName,
-                customerEmail: bookingData.customerEmail,
+                customerName: bookingData.customerName || bookingData.contactInfo?.name,
+                customerEmail: bookingData.customerEmail || bookingData.contactInfo?.email,
                 // invoiceNumber is optional; avoid signature mismatch if not required by merchant settings
                 // invoiceNumber: `INV-${bookingData.bookingId || 'PENDING'}`,
                 timestamp: Date.now(), // ms timestamp per CommercePay docs
                 ipAddress,
-                ...(channelId ? { channelId } : {}),
-                ...(providerChannelId ? { providerChannelId } : {}),
+                ...(selectedChannelId ? { channelId: selectedChannelId } : {}),
+                ...(selectedProviderChannelId ? { providerChannelId: selectedProviderChannelId } : {}),
             };
 
       console.log('CommercePay create-session pre-request payload', JSON.stringify(requestPayload));
       const paymentResponse = await this.commercePayService.requestPayment(requestPayload);
 
-      // Do NOT create/update booking here - wait for successful payment callback
-      // The booking will be created in the frontend after payment succeeds
+      // Attach CommercePay session information to the pending booking
+      booking.paymentInfo = {
+        ...booking.paymentInfo,
+        commercePaySessionId: paymentResponse.sessionId,
+        paymentInitiatedAt: booking.paymentInfo.paymentInitiatedAt || new Date(),
+      };
+      await booking.save();
 
       logPaymentOperation('session_created', referenceCode, 'success');
 
@@ -122,6 +220,8 @@ const requestPayload = {
         message: 'Payment session created successfully',
         data: {
           redirectUrl: paymentResponse.redirectUrl,
+          clientScript: (paymentResponse as any).clientScript,
+          redirectionType: (paymentResponse as any).redirectionType,
           referenceCode,
           sessionId: paymentResponse.sessionId,
           expiresAt: paymentResponse.expiresAt,
@@ -144,6 +244,27 @@ const requestPayload = {
    * Handle payment callback from CommercePay
    * POST /api/payment/commercepay/callback
    */
+  async getAvailableChannels(req: Request, res: Response): Promise<void> {
+    try {
+      const countryCode = String(req.query.countryCode || 'MY').toUpperCase();
+      const channels = await this.commercePayService.getTenantChannelsByCountry(countryCode);
+
+      res.status(200).json({
+        success: true,
+        message: 'Channel list retrieved successfully',
+        data: channels,
+      } as ApiResponse);
+    } catch (error) {
+      console.error('Error retrieving CommercePay channels:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to retrieve channels',
+        code: 'CHANNEL_LIST_FAILED',
+        error: error instanceof Error ? error.message : String(error),
+      } as ApiResponse);
+    }
+  }
+
   async handlePaymentCallback(req: Request, res: Response): Promise<void> {
     const startTime = Date.now();
 
@@ -170,10 +291,14 @@ const requestPayload = {
 
       if (!booking) {
         console.warn(`Booking not found for reference code: ${referenceCode}`);
-        res.status(404).json({
-          success: false,
-          message: 'Booking not found',
-          code: 'BOOKING_NOT_FOUND',
+        res.status(200).json({
+          success: true,
+          message: 'Payment verified; booking record not found yet. Frontend may create it separately.',
+          data: {
+            status: verification.status,
+            transactionNumber,
+            referenceCode,
+          },
         } as ApiResponse);
         return;
       }
@@ -402,6 +527,33 @@ const requestPayload = {
   }
 
   /**
+   * Fetch package details and determine if this is a private vehicle booking (private tour or private transfer)
+   */
+  private async getPrivateBookingInfo(booking: any): Promise<{ isPrivateBooking: boolean; packageDetails: any }> {
+    let packageDetails: any = null;
+    try {
+      if (booking.packageType === 'tour') {
+        const TourModel = mongoose.model('Tour');
+        packageDetails = await TourModel.findById(booking.packageId);
+      } else if (booking.packageType === 'transfer') {
+        const TransferModel = mongoose.model('Transfer');
+        packageDetails = await TransferModel.findById(booking.packageId);
+      }
+    } catch (pkgErr) {
+      console.warn('Could not fetch package details for email:', pkgErr);
+    }
+
+    const isPrivateBooking = Boolean(
+      packageDetails && (
+        (booking.packageType === 'tour' && packageDetails.type === 'private') ||
+        (booking.packageType === 'transfer' && packageDetails.type === 'Private')
+      )
+    );
+
+    return { isPrivateBooking, packageDetails };
+  }
+
+  /**
    * Handle successful payment
    */
   private async handlePaymentSuccess(booking: any, verification: any, transactionNumber: string): Promise<void> {
@@ -427,6 +579,9 @@ const requestPayload = {
         }
       );
 
+      // Fetch package details for email (to get vehicle info for private tours)
+      const { isPrivateBooking, packageDetails } = await this.getPrivateBookingInfo(booking);
+
       // Send confirmation email via Brevo
       await this.emailService.sendBookingConfirmation({
         customerName: booking.contactInfo?.name || booking.customerName,
@@ -441,6 +596,9 @@ const requestPayload = {
         children: booking.children,
         total: booking.paymentInfo?.amount || 0,
         currency: booking.paymentInfo?.currency || 'MYR',
+        isVehicleBooking: isPrivateBooking,
+        vehicleName: isPrivateBooking ? packageDetails?.vehicle : undefined,
+        vehicleSeatCapacity: isPrivateBooking ? packageDetails?.seatCapacity : undefined,
       });
 
       logPaymentOperation('payment_success_processed', booking.paymentInfo.commercePayReferenceCode, 'completed');
@@ -464,6 +622,9 @@ const requestPayload = {
 
       await booking.save();
 
+      // Fetch package details for email (to get vehicle info for private tours)
+      const { isPrivateBooking, packageDetails } = await this.getPrivateBookingInfo(booking);
+
       // Send failure notification email via Brevo
       await this.emailService.sendBookingConfirmation({
         customerName: booking.contactInfo?.name || booking.customerName,
@@ -478,6 +639,9 @@ const requestPayload = {
         children: booking.children,
         total: booking.paymentInfo?.amount || 0,
         currency: booking.paymentInfo?.currency || 'MYR',
+        isVehicleBooking: isPrivateBooking,
+        vehicleName: isPrivateBooking ? packageDetails?.vehicle : undefined,
+        vehicleSeatCapacity: isPrivateBooking ? packageDetails?.seatCapacity : undefined,
       });
 
       logPaymentOperation('payment_failure_processed', booking.paymentInfo.commercePayReferenceCode, 'failed');

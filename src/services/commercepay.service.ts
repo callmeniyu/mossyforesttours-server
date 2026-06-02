@@ -12,6 +12,7 @@
  */
 
 import axios, { AxiosError, AxiosInstance } from 'axios';
+import * as commercePayUtils from '../utils/commercepay.utils';
 import {
   CommercePayConfig,
   PaymentRequestData,
@@ -428,6 +429,11 @@ export class CommercePayService {
   /**
    * Health check - verify connection to CommercePay
    */
+
+  /**
+   * Health check - verify connection to CommercePay
+   */
+
   async healthCheck(): Promise<boolean> {
     try {
       const axiosInstance = await this.initializeAxiosInstance();
@@ -436,6 +442,28 @@ export class CommercePayService {
     } catch (error) {
       console.error('CommercePay health check failed:', error);
       return false;
+    }
+  }
+
+  /**
+   * Get available payment channels for a specific country
+   * @param countryCode - Default to MY
+   * @returns Array of payment channels
+   */
+  async getTenantChannelsByCountry(countryCode: string = 'MY'): Promise<any> {
+    try {
+      const axiosInstance = await this.initializeAxiosInstance();
+      const response = await retryWithBackoff(async () => {
+        return await axiosInstance.get(
+          `${COMMERCEPAY_CONSTANTS.API_PATHS.GET_TENANT_CHANNELS}?countryCode=${countryCode}`
+        );
+      });
+      
+      return response.data?.result ?? response.data;
+    } catch (error) {
+      const logger = (commercePayUtils as any).PaymentLogger || (commercePayUtils as any).default?.PaymentLogger;
+      logger?.log('error', 'Get Tenant Channels failed', { error: (error as any)?.message });
+      throw error;
     }
   }
 

@@ -73,6 +73,9 @@ export class CartService {
       const packagePrice = packageDoc.newPrice || packageDoc.price || 0;
       const totalPrice = (item.adults + item.children) * packagePrice;
 
+      // Determine if this is a private vehicle booking (private transfer or private tour with vehicle)
+      const isPrivateVehicleBooking = (item.packageType === 'transfer' && packageDoc.type === 'Private') || (item.packageType === 'tour' && packageDoc.type === 'private');
+
       // Create cart item
       const cartItem: ICartItem = {
         packageId: new mongoose.Types.ObjectId(item.packageId),
@@ -87,10 +90,10 @@ export class CartService {
         pickupLocation: item.pickupLocation || '',
         totalPrice: totalPrice,
         addedAt: new Date(),
-        // Add vehicle information for private transfers
-        isVehicleBooking: item.packageType === 'transfer' && packageDoc.type === 'Private',
-        vehicleName: item.packageType === 'transfer' && packageDoc.type === 'Private' ? packageDoc.vehicle : undefined,
-        vehicleSeatCapacity: item.packageType === 'transfer' && packageDoc.type === 'Private' ? packageDoc.seatCapacity : undefined
+        // Add vehicle information for private transfers and private tours
+        isVehicleBooking: isPrivateVehicleBooking,
+        vehicleName: isPrivateVehicleBooking ? packageDoc.vehicle : undefined,
+        vehicleSeatCapacity: isPrivateVehicleBooking ? packageDoc.seatCapacity : undefined
       };
 
       // Check if item already exists (same package, date, time)
