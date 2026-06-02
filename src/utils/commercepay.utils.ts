@@ -92,6 +92,8 @@ export interface PaymentRequestData {
   customerName?: string;
   customerEmail?: string;
   invoiceNumber?: string;
+  channelId?: string | number;
+  providerChannelId?: string;
   [key: string]: any;
 }
 
@@ -124,7 +126,7 @@ export interface WebhookPayload {
 /**
  * Logger utility for secure logging
  */
-class PaymentLogger {
+export class PaymentLogger {
   static log(level: 'info' | 'warn' | 'error' | 'debug', message: string, data?: any) {
     const timestamp = new Date().toISOString();
     const sanitized = this.sanitizeData(data);
@@ -691,6 +693,20 @@ export function buildPaymentRequestPayload(paymentData: PaymentRequestData): Pay
     payload.description = paymentData.description.substring(0, 200); // Limit to 200 chars
   }
 
+  if (paymentData.channelId !== undefined && paymentData.channelId !== null) {
+    const channelIdValueRaw = String(paymentData.channelId).trim();
+    if (channelIdValueRaw) {
+      const channelIdValueNumber = Number(channelIdValueRaw);
+      payload.channelId = Number.isNaN(channelIdValueNumber)
+        ? channelIdValueRaw
+        : channelIdValueNumber;
+    }
+  }
+
+  if (paymentData.providerChannelId?.toString().trim()) {
+    payload.providerChannelId = paymentData.providerChannelId.toString().trim();
+  }
+
   // Do not duplicate customer info as top-level fields; use nested customer object only
   // (reduces signature mismatch risk with CommercePay's expected payload format)
 
@@ -874,6 +890,7 @@ export const COMMERCEPAY_CONSTANTS = {
     VERIFY_TRANSACTION: '/PaymentGateway/VerifyTransaction',
     QUERY_TRANSACTION: '/PaymentGateway/QueryTransaction',
     REFUND: '/PaymentGateway/Refund',
+    GET_TENANT_CHANNELS: '/Channel/GetTenantChannelsByCountry',
   },
 
   // Timeout settings

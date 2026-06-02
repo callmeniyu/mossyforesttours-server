@@ -68,7 +68,20 @@ export async function createBooking(req: Request, res: Response) {
     let bookingPaymentInfo;
     let total;
 
-    if (isAdminBooking && paymentInfo) {
+    if (paymentInfo && paymentInfo.paymentStatus) {
+      bookingPaymentInfo = {
+        ...paymentInfo,
+        amount: paymentInfo.amount ?? subtotal,
+        currency: paymentInfo.currency || 'MYR',
+        bankCharge:
+          paymentInfo.bankCharge !== undefined
+            ? paymentInfo.bankCharge
+            : Number.isFinite(paymentInfo.amount)
+            ? Number(paymentInfo.amount) - Number(subtotal)
+            : 0,
+      };
+      total = bookingPaymentInfo.amount;
+    } else if (isAdminBooking && paymentInfo) {
       // For admin bookings, use the provided payment info (no bank charges)
       bookingPaymentInfo = paymentInfo;
       total = paymentInfo.amount;
@@ -80,7 +93,7 @@ export async function createBooking(req: Request, res: Response) {
         amount: total,
         bankCharge,
         currency: 'MYR',
-        paymentStatus: 'pending'
+        paymentStatus: 'pending',
       };
     }
 

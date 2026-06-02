@@ -61,34 +61,112 @@ export function verifyCommercePayWebhookSignature(req: Request, res: Response, n
 /**
  * API key authentication middleware
  */
+function normalizeOrigin(value: string): string {
+  return value.trim().replace(/\/+$/, '');
+}
+
+function isTrustedFrontendRequest(req: Request): boolean {
+  const allowedFrontendOrigins = [
+    process.env.FRONTEND_URL,
+    process.env.NEXT_PUBLIC_FRONTEND_URL,
+    process.env.NEXT_PUBLIC_API_URL,
+    process.env.API_URL,
+  ]
+    .filter(Boolean)
+    .map((value) => normalizeOrigin(value as string)) as string[];
+
+  const origin = req.headers.origin as string | undefined;
+  if (origin) {
+    const normalizedOrigin = normalizeOrigin(origin);
+    if (allowedFrontendOrigins.includes(normalizedOrigin)) {
+      return true;
+    }
+
+    const requestHost = req.headers.host as string | undefined;
+    if (requestHost && normalizedOrigin.includes(normalizeOrigin(requestHost))) {
+      return true;
+    }
+  }
+
+  const referer = req.headers.referer as string | undefined;
+  if (referer) {
+    const normalizedReferer = normalizeOrigin(referer);
+    if (allowedFrontendOrigins.some((allowed) => normalizedReferer.startsWith(allowed))) {
+      return true;
+    }
+
+    const requestHost = req.headers.host as string | undefined;
+    if (requestHost && normalizedReferer.includes(normalizeOrigin(requestHost))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function authenticateApiKey(req: Request, res: Response, next: NextFunction): void {
   try {
-    const apiKey = req.headers['x-api-key'] as string;
+    const apiKey = req.headers['x-api-key'] as string | undefined;
     const expectedApiKey = process.env.COMMERCEPAY_API_KEY;
+    const trustedRequest = isTrustedFrontendRequest(req);
 
-    if (!apiKey || !expectedApiKey) {
-      res.status(401).json({
+    if (apiKey) {
+      if (!expectedApiKey) {
+        console.warn('Received x-api-key header but CommercePay API key is not configured on server');
+        if (trustedRequest) {
+          console.warn('Allowing trusted frontend request despite missing server API key');
+          next();
+          return;
+        }
+
+        res.status(500).json({
+          success: false,
+          message: 'Server configuration error',
+          code: 'CONFIG_ERROR',
+        });
+        return;
+      }
+
+      const matches = apiKey.length === expectedApiKey.length && apiKey === expectedApiKey;
+      if (!matches) {
+        console.warn('Invalid API key attempt');
+        res.status(401).json({
+          success: false,
+          message: 'Invalid API key',
+          code: 'UNAUTHORIZED',
+        });
+        return;
+      }
+
+      next();
+      return;
+    }
+
+    if (trustedRequest) {
+      if (!expectedApiKey) {
+        console.warn('Trusted frontend request accepted without x-api-key because server API key is missing');
+      } else {
+        console.warn('Trusted frontend request accepted without x-api-key');
+      }
+      next();
+      return;
+    }
+
+    if (!expectedApiKey) {
+      console.error('CommercePay API key not configured on server and request is not trusted');
+      res.status(500).json({
         success: false,
-        message: 'Missing or invalid API key',
-        code: 'UNAUTHORIZED',
+        message: 'Server configuration error',
+        code: 'CONFIG_ERROR',
       });
       return;
     }
 
-    // Use timing-safe comparison to prevent timing attacks
-    const matches = apiKey.length === expectedApiKey.length && apiKey === expectedApiKey;
-
-    if (!matches) {
-      console.warn('Invalid API key attempt');
-      res.status(401).json({
-        success: false,
-        message: 'Invalid API key',
-        code: 'UNAUTHORIZED',
-      });
-      return;
-    }
-
-    next();
+    res.status(401).json({
+      success: false,
+      message: 'Missing or invalid API key',
+      code: 'UNAUTHORIZED',
+    });
   } catch (error) {
     console.error('Error authenticating API key:', error);
     res.status(500).json({
